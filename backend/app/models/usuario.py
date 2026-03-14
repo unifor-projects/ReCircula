@@ -1,24 +1,41 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
+from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
 
 
-class UsuarioBase(BaseModel):
-    nome: str = Field(..., min_length=2, max_length=100, examples=["João Silva"])
-    email: EmailStr = Field(..., examples=["joao@email.com"])
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
-class UsuarioCreate(UsuarioBase):
-    senha: str = Field(..., min_length=6, examples=["senha123"])
+class Usuario(Base):
+    __tablename__ = "usuarios"
 
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    nome: Mapped[str] = mapped_column(String(150), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    senha_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    foto_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    localizacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cep: Mapped[str | None] = mapped_column(String(9), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email_verificado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
 
-class UsuarioUpdate(BaseModel):
-    nome: Optional[str] = Field(None, min_length=2, max_length=100)
-    email: Optional[EmailStr] = None
-
-
-class UsuarioResponse(UsuarioBase):
-    id: int
-    criado_em: datetime
-
-    model_config = {"from_attributes": True}
+    anuncios: Mapped[list["Anuncio"]] = relationship(  # noqa: F821
+        "Anuncio", back_populates="usuario", cascade="all, delete-orphan"
+    )
+    mensagens_enviadas: Mapped[list["Mensagem"]] = relationship(  # noqa: F821
+        "Mensagem", back_populates="autor", foreign_keys="Mensagem.autor_id"
+    )
+    denuncias_feitas: Mapped[list["Denuncia"]] = relationship(  # noqa: F821
+        "Denuncia", back_populates="denunciante", foreign_keys="Denuncia.denunciante_id"
+    )
