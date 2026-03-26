@@ -1,0 +1,696 @@
+name: 🚀 Criar Issues das Sprints
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite "sim" para confirmar a criação das issues'
+        required: true
+        default: ''
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create-labels:
+    name: Criar Labels
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'sim'
+    steps:
+      - name: Criar labels de Sprint
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          create_label() {
+            local name="$1" color="$2" desc="$3"
+            gh label create "$name" --color "$color" --description "$desc" --repo "$REPO" 2>/dev/null || \
+            gh label edit "$name" --color "$color" --description "$desc" --repo "$REPO" 2>/dev/null || true
+          }
+          # Sprints
+          create_label "sprint-1" "0075ca" "Sprint 1 – Auth & Perfil (Semanas 1–2)"
+          create_label "sprint-2" "e4e669" "Sprint 2 – Anúncios & Busca (Semanas 3–4)"
+          create_label "sprint-3" "d93f0b" "Sprint 3 – Mensagens & Status (Semanas 5–6)"
+          create_label "sprint-4" "0e8a16" "Sprint 4 – Moderação & Deploy (Semanas 7–8)"
+          # Camadas
+          create_label "backend"  "f9d0c4" "Tarefa de Backend (FastAPI)"
+          create_label "frontend" "c5def5" "Tarefa de Frontend (Next.js)"
+          create_label "devops"   "bfd4f2" "Infraestrutura / CI-CD / Deploy"
+          create_label "docs"     "e8e8e8" "Documentação / Artigo Científico"
+          # Requisitos Funcionais
+          create_label "RF01" "fbca04" "RF01 – Gestão de Usuários"
+          create_label "RF02" "fbca04" "RF02 – Gestão de Perfil"
+          create_label "RF03" "fbca04" "RF03 – Criação e Gestão de Anúncios"
+          create_label "RF04" "fbca04" "RF04 – Busca e Filtragem"
+          create_label "RF05" "fbca04" "RF05 – Sistema de Mensagens Internas"
+          create_label "RF06" "fbca04" "RF06 – Gestão de Status dos Itens"
+          create_label "RF07" "fbca04" "RF07 – Moderação e Denúncia"
+          create_label "setup"    "1d76db" "Configuração inicial / Setup"
+
+  create-sprint-1:
+    name: Sprint 1 – Setup + RF01 + RF02
+    runs-on: ubuntu-latest
+    needs: create-labels
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: "[SETUP] Configurar projeto Next.js com TypeScript"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[SETUP] Configurar projeto Next.js com TypeScript" \
+            --label "sprint-1,frontend,setup" \
+            --body "## Objetivo
+          Inicializar o projeto de frontend com Next.js 14 e TypeScript.
+
+          ## Tarefas
+          - [ ] Criar projeto com \`npx create-next-app@latest --typescript\`
+          - [ ] Configurar Tailwind CSS para estilização responsiva (Mobile-First)
+          - [ ] Configurar ESLint e Prettier
+          - [ ] Criar estrutura de pastas: \`/components\`, \`/pages\`, \`/services\`, \`/contexts\`, \`/types\`
+          - [ ] Adicionar \`axios\` para requisições HTTP ao backend
+          - [ ] Configurar variável de ambiente \`NEXT_PUBLIC_API_URL\`
+
+          ## Critério de Aceitação
+          - Projeto roda localmente com \`npm run dev\` sem erros
+          - Estrutura de pastas organizada conforme DAS
+
+          **Sprint:** Sprint 1 | **Responsável:** Frontend Dev"
+
+      - name: "[SETUP] Configurar Docker Compose (backend + frontend + db)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[SETUP] Configurar Docker Compose (backend + frontend + db)" \
+            --label "sprint-1,devops,setup" \
+            --body "## Objetivo
+          Orquestrar todos os serviços do projeto com Docker Compose para desenvolvimento local consistente.
+
+          ## Tarefas
+          - [ ] Criar \`docker-compose.yml\` com serviços: \`frontend\`, \`backend\`, \`db\` (PostgreSQL)
+          - [ ] Criar \`Dockerfile\` para o backend (FastAPI + Uvicorn)
+          - [ ] Criar \`Dockerfile\` para o frontend (Next.js)
+          - [ ] Configurar variáveis de ambiente via \`.env\` (usar \`.env.example\` existente)
+          - [ ] Garantir que as migrações Alembic rodem automaticamente na inicialização
+          - [ ] Testar \`docker compose up\` e validar todos os serviços
+
+          ## Critério de Aceitação
+          - \`docker compose up\` sobe todos os serviços sem erros
+          - Frontend em \`localhost:3000\`, backend em \`localhost:8000\`
+
+          **Sprint:** Sprint 1 | **Responsável:** DevOps/Backend Dev"
+
+      - name: "[SETUP] Configurar GitHub Actions CI/CD básico"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[SETUP] Configurar GitHub Actions CI/CD básico" \
+            --label "sprint-1,devops,setup" \
+            --body "## Objetivo
+          Garantir qualidade de código automaticamente a cada pull request.
+
+          ## Tarefas
+          - [ ] Criar workflow \`.github/workflows/ci.yml\`
+          - [ ] Job de lint do backend (\`flake8\` ou \`ruff\`)
+          - [ ] Job de testes do backend (\`pytest\`) quando houver testes
+          - [ ] Job de lint do frontend (\`eslint\`)
+          - [ ] Job de build do frontend (\`npm run build\`)
+          - [ ] Configurar o workflow para rodar em PRs para \`main\`
+
+          ## Critério de Aceitação
+          - Workflow roda sem erros em um PR de teste
+          - Falhas de lint ou build bloqueiam o merge
+
+          **Sprint:** Sprint 1 | **Responsável:** DevOps Dev"
+
+      - name: "[RF01 - BE] Finalizar e testar endpoint de cadastro (POST /auth/register)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF01 - BE] Finalizar e testar endpoint de cadastro (POST /auth/register)" \
+            --label "sprint-1,backend,RF01" \
+            --body "## Objetivo
+          Garantir que o endpoint de cadastro esteja completo, com validações e hash de senha.
+
+          ## Tarefas
+          - [ ] Validar campos obrigatórios: nome, e-mail, senha (RF01.1)
+          - [ ] Hash da senha com BCrypt (RNF07)
+          - [ ] Verificar duplicidade de e-mail (retornar 409 se já cadastrado)
+          - [ ] Enviar e-mail de verificação após cadastro (RNF01)
+          - [ ] Retornar token JWT após cadastro bem-sucedido
+          - [ ] Escrever testes básicos do endpoint
+
+          ## Referências
+          - RF01.1, RNF01, RNF07
+          - Arquivo: \`backend/app/routers/auth.py\`, \`backend/app/models/usuario.py\`
+
+          **Sprint:** Sprint 1 | **Responsável:** Backend Dev"
+
+      - name: "[RF01 - BE] Implementar endpoint de login com JWT (POST /auth/login)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF01 - BE] Implementar endpoint de login com JWT (POST /auth/login)" \
+            --label "sprint-1,backend,RF01" \
+            --body "## Objetivo
+          Autenticar usuários e retornar access token + refresh token.
+
+          ## Tarefas
+          - [ ] Endpoint \`POST /auth/login\` com e-mail e senha
+          - [ ] Verificar se e-mail está confirmado antes de permitir login (RNF01)
+          - [ ] Gerar access token JWT (expiração curta, ex: 30 min)
+          - [ ] Gerar refresh token (expiração longa, ex: 7 dias)
+          - [ ] Endpoint \`POST /auth/logout\` (invalidar refresh token)
+          - [ ] Endpoint \`POST /auth/refresh\` para renovar access token
+
+          ## Referências
+          - RF01.2, RF01.3, RNF07
+          - Arquivo: \`backend/app/routers/auth.py\`, \`backend/app/core/security.py\`
+
+          **Sprint:** Sprint 1 | **Responsável:** Backend Dev"
+
+      - name: "[RF01 - BE] Implementar recuperação de senha por e-mail"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF01 - BE] Implementar recuperação de senha por e-mail" \
+            --label "sprint-1,backend,RF01" \
+            --body "## Objetivo
+          Permitir que o usuário redefina sua senha caso a esqueça.
+
+          ## Tarefas
+          - [ ] Endpoint \`POST /auth/forgot-password\` (recebe e-mail)
+          - [ ] Gerar token temporário e enviar e-mail com link de redefinição
+          - [ ] Endpoint \`POST /auth/reset-password\` (recebe token + nova senha)
+          - [ ] Validar expiração do token de reset (ex: 1 hora)
+          - [ ] Aplicar hash na nova senha antes de salvar
+
+          ## Referências
+          - RF01.2, RNF07
+
+          **Sprint:** Sprint 1 | **Responsável:** Backend Dev"
+
+      - name: "[RF01 - FE] Criar páginas de Cadastro e Login"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF01 - FE] Criar páginas de Cadastro e Login" \
+            --label "sprint-1,frontend,RF01" \
+            --body "## Objetivo
+          Criar as telas de entrada da plataforma: cadastro e login.
+
+          ## Tarefas
+          - [ ] Página \`/register\`: formulário com nome, e-mail, senha e confirmação de senha
+          - [ ] Página \`/login\`: formulário com e-mail e senha
+          - [ ] Link \"Esqueci minha senha\" na página de login
+          - [ ] Página \`/forgot-password\`: formulário de recuperação de senha
+          - [ ] Validação de campos no frontend (ex: e-mail válido, senha mínima)
+          - [ ] Feedback de erros ao usuário (ex: \"E-mail já cadastrado\")
+          - [ ] Design responsivo (Mobile-First, Tailwind CSS)
+
+          ## Referências
+          - RF01.1, RF01.2, RNF04
+
+          **Sprint:** Sprint 1 | **Responsável:** Frontend Dev"
+
+      - name: "[RF01 - FE] Implementar contexto de autenticação (JWT no cliente)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF01 - FE] Implementar contexto de autenticação (JWT no cliente)" \
+            --label "sprint-1,frontend,RF01" \
+            --body "## Objetivo
+          Gerenciar o estado de autenticação do usuário em toda a aplicação frontend.
+
+          ## Tarefas
+          - [ ] Criar \`AuthContext\` com React Context API
+          - [ ] Armazenar access token de forma segura (httpOnly cookie ou sessionStorage)
+          - [ ] Lógica de refresh automático do token antes de expirar
+          - [ ] Hook \`useAuth()\` para acessar dados do usuário logado
+          - [ ] Middleware Next.js para proteger rotas privadas (redirecionar para /login)
+          - [ ] Função de logout que limpa o estado e redireciona
+
+          ## Referências
+          - RF01.3, RNF07
+
+          **Sprint:** Sprint 1 | **Responsável:** Frontend Dev"
+
+      - name: "[RF02 - BE] Implementar endpoints de perfil (GET e PATCH /usuarios/{id})"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF02 - BE] Implementar endpoints de perfil (GET e PATCH /usuarios/{id})" \
+            --label "sprint-1,backend,RF02" \
+            --body "## Objetivo
+          Permitir visualização e edição dos dados do perfil do usuário.
+
+          ## Tarefas
+          - [ ] Endpoint \`GET /usuarios/{id}\` – retorna nome, foto, localização, bio e anúncios publicados (RF02.1, RF02.3)
+          - [ ] Endpoint \`PATCH /usuarios/me\` – atualiza foto, bio, localização (RF02.2)
+          - [ ] Upload de foto de perfil: aceitar JPG/PNG, aplicar compressão (RNF02)
+          - [ ] Salvar imagem em storage (local ou S3) e retornar URL pública
+          - [ ] Garantir que apenas o próprio usuário possa editar seu perfil
+
+          ## Referências
+          - RF02.1, RF02.2, RF02.3, RNF02, RNF05
+          - Arquivo: \`backend/app/routers/usuarios.py\`
+
+          **Sprint:** Sprint 1 | **Responsável:** Backend Dev"
+
+      - name: "[RF02 - FE] Criar página de Perfil e formulário de Edição"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF02 - FE] Criar página de Perfil e formulário de Edição" \
+            --label "sprint-1,frontend,RF02" \
+            --body "## Objetivo
+          Exibir o perfil público do usuário e permitir que o próprio usuário edite seus dados.
+
+          ## Tarefas
+          - [ ] Página \`/perfil/[id]\`: exibe foto, nome, localização aproximada, bio e histórico de anúncios (RF02.1, RF02.3)
+          - [ ] Botão \"Editar Perfil\" visível apenas para o dono do perfil
+          - [ ] Formulário de edição com campos: foto, bio, localização (CEP)
+          - [ ] Componente de preview da foto antes do upload
+          - [ ] Feedback de sucesso/erro ao salvar
+          - [ ] Design responsivo (Mobile-First)
+
+          ## Referências
+          - RF02.1, RF02.2, RF02.3, RNF04
+
+          **Sprint:** Sprint 1 | **Responsável:** Frontend Dev"
+
+  create-sprint-2:
+    name: Sprint 2 – RF03 + RF04
+    runs-on: ubuntu-latest
+    needs: create-sprint-1
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: "[RF03 - BE] Implementar CRUD de anúncios (POST, GET, PATCH, DELETE)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF03 - BE] Implementar CRUD de anúncios (POST, GET, PATCH, DELETE)" \
+            --label "sprint-2,backend,RF03" \
+            --body "## Objetivo
+          Criar os endpoints completos de gestão de anúncios de doação e troca.
+
+          ## Tarefas
+          - [ ] \`POST /anuncios\` – criar anúncio (título, descrição, categoria, condição, localização) (RF03.1, RF03.2)
+          - [ ] \`GET /anuncios/{id}\` – visualizar detalhes de um anúncio
+          - [ ] \`PATCH /anuncios/{id}\` – editar anúncio (somente o dono) (RF03.4)
+          - [ ] \`DELETE /anuncios/{id}\` – remover anúncio (somente o dono)
+          - [ ] \`GET /usuarios/{id}/anuncios\` – listar anúncios de um usuário
+          - [ ] Validar autenticação: somente usuários logados podem criar anúncios
+          - [ ] Associar o anúncio ao usuário criador automaticamente
+
+          ## Referências
+          - RF03.1, RF03.2, RF03.4, RNF01
+          - Arquivo: \`backend/app/routers/anuncios.py\`, \`backend/app/models/anuncio.py\`
+
+          **Sprint:** Sprint 2 | **Responsável:** Backend Dev"
+
+      - name: "[RF03 - BE] Implementar upload de imagens do anúncio (RF03.3 + RNF02)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF03 - BE] Implementar upload de imagens do anúncio (RF03.3 + RNF02)" \
+            --label "sprint-2,backend,RF03" \
+            --body "## Objetivo
+          Permitir o upload de uma ou mais imagens por anúncio com compressão automática.
+
+          ## Tarefas
+          - [ ] Endpoint \`POST /anuncios/{id}/imagens\` – upload de imagem (aceitar JPG/PNG)
+          - [ ] Aplicar compressão automática server-side (ex: usando Pillow)
+          - [ ] Limitar tamanho máximo por imagem (ex: 5MB antes da compressão)
+          - [ ] Limitar número máximo de imagens por anúncio (ex: 5)
+          - [ ] Salvar no storage (local em dev, S3 em prod) e retornar URLs
+          - [ ] Endpoint \`DELETE /anuncios/{id}/imagens/{img_id}\` – remover imagem
+          - [ ] Associar imagens ao anúncio no modelo de dados
+
+          ## Referências
+          - RF03.3, RNF02
+          - Arquivo: \`backend/app/models/anuncio.py\` (tabela de imagens)
+
+          **Sprint:** Sprint 2 | **Responsável:** Backend Dev"
+
+      - name: "[RF03 - BE] Gerenciar categorias (Labels) dos anúncios"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF03 - BE] Gerenciar categorias (Labels) dos anúncios" \
+            --label "sprint-2,backend,RF03" \
+            --body "## Objetivo
+          Implementar o sistema de categorias/tags para anúncios, suportando múltiplas categorias por anúncio.
+
+          ## Tarefas
+          - [ ] Popular tabela de categorias predefinidas (ex: Eletrônicos, Roupas, Móveis, Livros, Outros)
+          - [ ] \`GET /categorias\` – listar todas as categorias disponíveis
+          - [ ] Associar categorias ao criar/editar anúncio (relação muitos-para-muitos)
+          - [ ] Garantir a migração Alembic para a tabela \`anuncio_categoria\`
+
+          ## Referências
+          - RF03.2, RF04.2
+          - Arquivo: \`backend/app/routers/categorias.py\`, \`backend/app/models/categoria.py\`
+
+          **Sprint:** Sprint 2 | **Responsável:** Backend Dev"
+
+      - name: "[RF03 - FE] Criar formulário de criação e edição de anúncio"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF03 - FE] Criar formulário de criação e edição de anúncio" \
+            --label "sprint-2,frontend,RF03" \
+            --body "## Objetivo
+          Criar a tela de criação e edição de anúncios de doação/troca.
+
+          ## Tarefas
+          - [ ] Página \`/anuncios/novo\`: formulário com título, descrição, categoria (select), condição do item e localização (CEP)
+          - [ ] Indicar claramente se é doação ou troca
+          - [ ] Componente de upload de imagens com preview (aceitar múltiplas imagens) (RF03.3)
+          - [ ] Reuso do formulário para edição (\`/anuncios/[id]/editar\`)
+          - [ ] Validação de campos obrigatórios antes de submeter
+          - [ ] Feedback de sucesso com redirecionamento para o anúncio criado
+
+          ## Referências
+          - RF03.1, RF03.2, RF03.3, RF03.4, RNF04
+
+          **Sprint:** Sprint 2 | **Responsável:** Frontend Dev"
+
+      - name: "[RF03 - FE] Criar página de detalhes do anúncio"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF03 - FE] Criar página de detalhes do anúncio" \
+            --label "sprint-2,frontend,RF03" \
+            --body "## Objetivo
+          Exibir todas as informações de um anúncio específico.
+
+          ## Tarefas
+          - [ ] Página \`/anuncios/[id]\`: galeria de imagens, título, descrição, categoria, condição, localização e status
+          - [ ] Exibir avatar e nome do anunciante (com link para o perfil)
+          - [ ] Botão \"Tenho Interesse / Enviar Mensagem\" (visível apenas para usuários logados que não são o dono)
+          - [ ] Botões de \"Editar\" e \"Alterar Status\" visíveis apenas para o dono do anúncio
+          - [ ] Design responsivo com galeria de imagens funcional
+
+          ## Referências
+          - RF03.1, RF03.2, RF05.1, RNF04
+
+          **Sprint:** Sprint 2 | **Responsável:** Frontend Dev"
+
+      - name: "[RF04 - BE] Implementar busca por palavra-chave e filtros de categoria"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF04 - BE] Implementar busca por palavra-chave e filtros de categoria" \
+            --label "sprint-2,backend,RF04" \
+            --body "## Objetivo
+          Criar o motor de busca de anúncios por texto e categoria.
+
+          ## Tarefas
+          - [ ] Endpoint \`GET /anuncios?q=&categoria=&status=\` – busca combinada
+          - [ ] Busca case-insensitive em título e descrição (RF04.1, RN02 do DAS)
+          - [ ] Filtro por categoria (RF04.2)
+          - [ ] Filtro por status (mostrar apenas \"Disponível\" e \"Reservado\" por padrão) (RF06.2)
+          - [ ] Ordenação por data de publicação (RF04.4)
+          - [ ] Criar índices no banco para os campos \`titulo\`, \`descricao\` e \`categoria_id\` (RNF06)
+          - [ ] Paginação dos resultados
+
+          ## Referências
+          - RF04.1, RF04.2, RF04.4, RNF06
+          - Arquivo: \`backend/app/routers/anuncios.py\`
+
+          **Sprint:** Sprint 2 | **Responsável:** Backend Dev"
+
+      - name: "[RF04 - BE] Integrar geolocalização para filtro por proximidade (RNF03)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF04 - BE] Integrar geolocalização para filtro por proximidade (RNF03)" \
+            --label "sprint-2,backend,RF04" \
+            --body "## Objetivo
+          Permitir que o usuário encontre anúncios próximos de sua localização.
+
+          ## Tarefas
+          - [ ] Integrar com ViaCEP API (gratuita) para converter CEP em coordenadas (lat/long)
+          - [ ] Salvar coordenadas geográficas no anúncio ao criar (ou via CEP informado)
+          - [ ] Adicionar parâmetros \`?cep=&raio_km=\` no endpoint de busca (RF04.3)
+          - [ ] Implementar cálculo de distância (Haversine ou extensão PostGIS)
+          - [ ] Ordenação por proximidade geográfica (RF04.4)
+          - [ ] Tratar caso onde usuário não fornece localização (retornar resultados sem filtro geo)
+
+          ## Referências
+          - RF04.3, RF04.4, RNF03
+
+          **Sprint:** Sprint 2 | **Responsável:** Backend Dev"
+
+      - name: "[RF04 - FE] Criar página de busca e listagem de anúncios"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF04 - FE] Criar página de busca e listagem de anúncios" \
+            --label "sprint-2,frontend,RF04" \
+            --body "## Objetivo
+          Criar a página principal de descoberta de anúncios com busca e filtros.
+
+          ## Tarefas
+          - [ ] Página \`/\` (Home) ou \`/anuncios\`: feed de anúncios em cards
+          - [ ] Barra de busca por palavra-chave no topo (RF04.1)
+          - [ ] Filtro por categoria (dropdown ou chips) (RF04.2)
+          - [ ] Campo de CEP para filtro de proximidade (RF04.3)
+          - [ ] Seleção de raio de distância (ex: 5km, 10km, 25km)
+          - [ ] Ordenação: mais recentes / mais próximos (RF04.4)
+          - [ ] Card de anúncio: foto principal, título, categoria, localização e status
+          - [ ] Paginação ou scroll infinito
+          - [ ] Estado vazio (nenhum resultado encontrado)
+
+          ## Referências
+          - RF04.1, RF04.2, RF04.3, RF04.4, RNF04, RNF06
+
+          **Sprint:** Sprint 2 | **Responsável:** Frontend Dev"
+
+  create-sprint-3:
+    name: Sprint 3 – RF05 + RF06
+    runs-on: ubuntu-latest
+    needs: create-sprint-2
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: "[RF05 - BE] Implementar endpoints do sistema de mensagens"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF05 - BE] Implementar endpoints do sistema de mensagens" \
+            --label "sprint-3,backend,RF05" \
+            --body "## Objetivo
+          Criar a API de mensagens internas entre doador e interessado, vinculada ao anúncio.
+
+          ## Tarefas
+          - [ ] \`POST /mensagens\` – enviar mensagem (campos: destinatario_id, anuncio_id, texto) (RF05.1)
+          - [ ] \`GET /mensagens/conversas\` – listar todas as conversas do usuário logado (RF05.2)
+          - [ ] \`GET /mensagens/conversas/{conversa_id}\` – obter histórico de mensagens de uma conversa (RF05.2)
+          - [ ] Agrupar mensagens por par (usuário A + usuário B) no contexto de um anúncio
+          - [ ] Garantir que um usuário só visualize conversas das quais participa (RNF05, RN01 do DAS)
+          - [ ] Não expor dados pessoais (telefone, e-mail) nas mensagens automaticamente (RNF05)
+
+          ## Referências
+          - RF05.1, RF05.2, RF05.4, RNF05
+          - Arquivo: \`backend/app/routers/mensagens.py\`, \`backend/app/models/mensagem.py\`
+
+          **Sprint:** Sprint 3 | **Responsável:** Backend Dev"
+
+      - name: "[RF05 - BE] Implementar sistema de notificações de novas mensagens (RF05.3)"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF05 - BE] Implementar sistema de notificações de novas mensagens (RF05.3)" \
+            --label "sprint-3,backend,RF05" \
+            --body "## Objetivo
+          Notificar o usuário quando receber uma nova mensagem.
+
+          ## Tarefas
+          - [ ] Endpoint \`GET /notificacoes\` – listar notificações não lidas do usuário (RF05.3)
+          - [ ] Endpoint \`PATCH /notificacoes/{id}/lida\` – marcar notificação como lida
+          - [ ] Gerar notificação ao criar nova mensagem
+          - [ ] Retornar contagem de não lidas no endpoint de notificações
+          - [ ] (Opcional) Polling simples no frontend a cada 30s para verificar novas mensagens
+
+          ## Referências
+          - RF05.3, RN03 do DAS (RF05)
+
+          **Sprint:** Sprint 3 | **Responsável:** Backend Dev"
+
+      - name: "[RF05 - FE] Criar interface de chat e listagem de conversas"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF05 - FE] Criar interface de chat e listagem de conversas" \
+            --label "sprint-3,frontend,RF05" \
+            --body "## Objetivo
+          Criar a área de mensagens da plataforma onde doadores e interessados se comunicam.
+
+          ## Tarefas
+          - [ ] Página \`/mensagens\`: lista de conversas ativas com preview da última mensagem (RF05.2)
+          - [ ] Página \`/mensagens/[conversa_id]\`: tela de chat com histórico em ordem cronológica (RF05.2)
+          - [ ] Campo de texto e botão de enviar mensagem (RF05.1)
+          - [ ] Exibir contexto do anúncio no topo da conversa (RF05.4)
+          - [ ] Ícone de notificação no header com contagem de mensagens não lidas (RF05.3)
+          - [ ] Marcar mensagens como lidas ao abrir a conversa
+          - [ ] Polling automático para novas mensagens (ex: a cada 30s)
+
+          ## Referências
+          - RF05.1, RF05.2, RF05.3, RF05.4, RNF04, RNF05
+
+          **Sprint:** Sprint 3 | **Responsável:** Frontend Dev"
+
+      - name: "[RF06 - BE] Implementar alteração de status e histórico do anúncio"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF06 - BE] Implementar alteração de status e histórico do anúncio" \
+            --label "sprint-3,backend,RF06" \
+            --body "## Objetivo
+          Permitir que o anunciante controle o ciclo de vida do seu anúncio com registro histórico.
+
+          ## Tarefas
+          - [ ] Endpoint \`PATCH /anuncios/{id}/status\` – alterar status para Disponível, Reservado ou Doado/Trocado (RF06.1)
+          - [ ] Somente o dono do anúncio pode alterar o status
+          - [ ] Registrar cada mudança de status no histórico (tabela \`status_historico\`) com data/hora (RF06.3)
+          - [ ] Histórico imutável: apenas inserção, sem edição de registros passados (RN03 do DAS)
+          - [ ] Anúncios com status \"Doado/Trocado\" não devem aparecer nos resultados de busca (RF06.2)
+          - [ ] Permitir reverter de \"Reservado\" para \"Disponível\" (RN02 do DAS)
+          - [ ] Endpoint \`GET /anuncios/{id}/status-historico\` – retornar timeline de status (RF06.3)
+
+          ## Referências
+          - RF06.1, RF06.2, RF06.3
+
+          **Sprint:** Sprint 3 | **Responsável:** Backend Dev"
+
+      - name: "[RF06 - FE] Criar componente de status e timeline no anúncio"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF06 - FE] Criar componente de status e timeline no anúncio" \
+            --label "sprint-3,frontend,RF06" \
+            --body "## Objetivo
+          Permitir que o dono do anúncio altere o status e exiba a timeline visualmente.
+
+          ## Tarefas
+          - [ ] Componente de seleção de status (Disponível / Reservado / Doado/Trocado) na página do anúncio (RF06.1)
+          - [ ] Exibir badge/etiqueta visual de status no card e na página do anúncio
+          - [ ] Anúncios \"Reservado\" aparecem com badge amarelo na busca (RN01 do DAS)
+          - [ ] Seção de timeline/histórico de status na página do anúncio (RF06.3)
+          - [ ] Confirmação antes de marcar como \"Doado/Trocado\" (ação irreversível no feed)
+
+          ## Referências
+          - RF06.1, RF06.2, RF06.3, RNF04
+
+          **Sprint:** Sprint 3 | **Responsável:** Frontend Dev"
+
+  create-sprint-4:
+    name: Sprint 4 – RF07 + Deploy + Artigo (Leve)
+    runs-on: ubuntu-latest
+    needs: create-sprint-3
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: "[RF07 - BE] Implementar endpoint de denúncia de anúncio/usuário"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF07 - BE] Implementar endpoint de denúncia de anúncio/usuário" \
+            --label "sprint-4,backend,RF07" \
+            --body "## Objetivo
+          Permitir que usuários reportem conteúdos ou comportamentos inadequados.
+
+          ## Tarefas
+          - [ ] Endpoint \`POST /denuncias\` – criar denúncia (campos: tipo (anuncio/usuario), alvo_id, motivo, descricao) (RF07.1)
+          - [ ] Validar que o denunciante está autenticado
+          - [ ] Não revelar o autor da denúncia ao denunciado (RN01 do DAS)
+          - [ ] Notificar painel admin sobre nova denúncia
+
+          ## Referências
+          - RF07.1, RN01 do DAS
+          - Arquivo: \`backend/app/routers/denuncias.py\`
+
+          **Sprint:** Sprint 4 | **Responsável:** Backend Dev"
+
+      - name: "[RF07 - BE] Implementar painel administrativo de moderação"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF07 - BE] Implementar painel administrativo de moderação" \
+            --label "sprint-4,backend,RF07" \
+            --body "## Objetivo
+          Dar ferramentas ao administrador para analisar e resolver denúncias.
+
+          ## Tarefas
+          - [ ] Endpoint \`GET /admin/denuncias\` – listar denúncias pendentes (RF07.2)
+          - [ ] Endpoint \`PATCH /admin/denuncias/{id}/resolver\` – resolver denúncia com ação: ignorar, remover_anuncio, suspender_usuario (RF07.3)
+          - [ ] Endpoint \`DELETE /admin/anuncios/{id}\` – remover anúncio por decisão administrativa (RF07.3)
+          - [ ] Endpoint \`PATCH /admin/usuarios/{id}/suspender\` – suspender usuário (RF07.3)
+          - [ ] Proteger rotas \`/admin/*\` com verificação de role \"administrador\" (RN03 do DAS)
+          - [ ] Log imutável de decisões administrativas
+
+          ## Referências
+          - RF07.2, RF07.3, RN03 do DAS
+
+          **Sprint:** Sprint 4 | **Responsável:** Backend Dev"
+
+      - name: "[RF07 - FE] Adicionar botão de denúncia e criar painel admin"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[RF07 - FE] Adicionar botão de denúncia e criar painel admin" \
+            --label "sprint-4,frontend,RF07" \
+            --body "## Objetivo
+          Integrar o fluxo de denúncia na UI e criar o painel de administração.
+
+          ## Tarefas
+          - [ ] Botão \"Denunciar\" na página do anúncio (visível para não-donos) e no perfil do usuário (RF07.1)
+          - [ ] Modal de denúncia com seleção de motivo e campo de descrição opcional
+          - [ ] Feedback de confirmação após enviar denúncia
+          - [ ] Página \`/admin/moderacao\` (protegida por role admin): lista de denúncias pendentes (RF07.2)
+          - [ ] Ações na lista: Ignorar / Remover Anúncio / Suspender Usuário (RF07.3)
+
+          ## Referências
+          - RF07.1, RF07.2, RF07.3, RNF04
+
+          **Sprint:** Sprint 4 | **Responsável:** Frontend Dev"
+
+      - name: "[DEPLOY] Preparar ambiente de produção com Docker Compose"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[DEPLOY] Preparar ambiente de produção com Docker Compose" \
+            --label "sprint-4,devops" \
+            --body "## Objetivo
+          Garantir que todos os serviços estejam prontos para o deploy em produção.
+
+          ## Tarefas
+          - [ ] Criar \`docker-compose.prod.yml\` com configurações de produção (sem volumes de dev, com restart policy)
+          - [ ] Configurar Nginx como reverse proxy (HTTPS/TLS) (RNF07)
+          - [ ] Criar arquivo \`.env.production\` com variáveis sensíveis (não commitar no git)
+          - [ ] Garantir que as migrações Alembic rodem no startup do container backend
+          - [ ] Configurar volumes persistentes para o banco de dados PostgreSQL
+          - [ ] Testar o build de produção localmente antes do deploy
+
+          **Sprint:** Sprint 4 | **Responsável:** DevOps Dev"
+
+      - name: "[DEPLOY] Fazer deploy da aplicação na AWS EC2"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[DEPLOY] Fazer deploy da aplicação na AWS EC2" \
+            --label "sprint-4,devops" \
+            --body "## Objetivo
+          Publicar a plataforma ReCircula em ambiente de produção na AWS.
+
+          ## Tarefas
+          - [ ] Provisionar instância EC2 (recomendado: t3.small com Ubuntu 22.04)
+          - [ ] Instalar Docker e Docker Compose na instância
+          - [ ] Configurar Security Groups (portas 80, 443, 22)
+          - [ ] Fazer deploy via \`git pull\` + \`docker compose up -d --build\`
+          - [ ] Configurar domínio e certificado SSL (Let's Encrypt via Certbot)
+          - [ ] Validar que a aplicação está acessível publicamente via HTTPS
+
+          ## Referências
+          - Seção 8 do DAS (Visão de Implantação)
+
+          **Sprint:** Sprint 4 | **Responsável:** DevOps Dev"
+
+      - name: "[ARTIGO] Escrever introdução, metodologia e resultados do artigo científico"
+        run: |
+          gh issue create --repo "$REPO" \
+            --title "[ARTIGO] Escrever introdução, metodologia e resultados do artigo científico" \
+            --label "sprint-4,docs" \
+            --body "## Objetivo
+          Documentar o projeto ReCircula em formato de artigo científico para a disciplina.
+
+          ## Tarefas
+          - [ ] Escrever Resumo e Abstract (PT-BR e EN)
+          - [ ] Redigir seção de Introdução (problema, justificativa e objetivos do projeto)
+          - [ ] Descrever a Metodologia de Desenvolvimento (sprints, tecnologias usadas, arquitetura)
+          - [ ] Documentar os Resultados (funcionalidades implementadas, screenshots)
+          - [ ] Redigir Conclusão e Trabalhos Futuros
+          - [ ] Formatar no template exigido pela disciplina
+          - [ ] Revisar e entregar
+
+          **Sprint:** Sprint 4 | **Responsável:** João Guilherme & Mariana Vieira"
