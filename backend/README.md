@@ -6,14 +6,22 @@ Backend da **Plataforma de Doação e Troca** (Unifor), construído com [FastAPI
 
 - Python 3.11+
 - PostgreSQL 14+
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
 
 ## Instalação
 
 ```bash
+# Instalar uv (caso não tenha)
+pip install uv
+
 cd backend
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+
+# Criar o ambiente virtual e instalar dependências de produção
+uv sync
+
+# Incluir dependências de desenvolvimento (pytest, httpx, etc.)
+uv sync --group dev
+
 cp .env.example .env        # edite DATABASE_URL e SECRET_KEY
 ```
 
@@ -24,16 +32,22 @@ cp .env.example .env        # edite DATABASE_URL e SECRET_KEY
 createdb doacao_troca
 
 # Executar as migrações (Alembic)
-alembic upgrade head
+uv run alembic upgrade head
 
 # Criar nova migração após alterar modelos
-alembic revision --autogenerate -m "descricao da mudança"
+uv run alembic revision --autogenerate -m "descricao da mudança"
 ```
 
 ## Executar
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Testes
+
+```bash
+uv run pytest
 ```
 
 ## Documentação
