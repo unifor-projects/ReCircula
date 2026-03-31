@@ -1,0 +1,31 @@
+import secrets
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # App
+    APP_ENV: str = "development"
+    APP_HOST: str = "0.0.0.0"
+    APP_PORT: int = 8000
+
+    # CORS – comma-separated list of allowed origins; '*' only in development
+    CORS_ORIGINS: str = "*"
+
+    # Database
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/doacao_troca"
+
+    # JWT – SECRET_KEY must be set in production via environment variable
+    SECRET_KEY: str = secrets.token_urlsafe(32)
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        if self.CORS_ORIGINS.strip() == "*":
+            return ["*"]
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+
+settings = Settings()
