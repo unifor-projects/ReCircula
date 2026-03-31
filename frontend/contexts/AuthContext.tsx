@@ -21,8 +21,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem('access_token');
     const storedUser = localStorage.getItem('user');
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser) as User);
+      try {
+        const parsedUser = JSON.parse(storedUser) as User;
+        setToken(storedToken);
+        setUser(parsedUser);
+      } catch {
+        // Clear invalid auth data and fall back to logged-out state
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        setToken(null);
+        setUser(null);
+      }
     }
   }, []);
 
