@@ -1,7 +1,9 @@
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline';
   isLoading?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export default function Button({
