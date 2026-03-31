@@ -38,3 +38,10 @@ htmlcov/
 
 # Mypy
 .mypy_cache/
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/*.tsbuildinfo
+frontend/.env*.local
