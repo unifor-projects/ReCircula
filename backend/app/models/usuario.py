@@ -23,6 +23,7 @@ class Usuario(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verificado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    token_verificacao: Mapped[str | None] = mapped_column(String(64), nullable=True)
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

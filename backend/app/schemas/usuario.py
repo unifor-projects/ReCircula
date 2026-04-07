@@ -49,5 +49,11 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class RegisterResponse(BaseModel):
+    usuario: UsuarioResponse
+    access_token: str
+    token_type: str = "bearer"
+
+
 class TokenData(BaseModel):
     sub: Optional[str] = None

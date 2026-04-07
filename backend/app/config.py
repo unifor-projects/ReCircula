@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
+    # Email (SMTP) – leave SMTP_HOST empty to disable email sending
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@recircula.app"
+    SMTP_TLS: bool = True
+
+    # Frontend base URL used in e-mail links
+    FRONTEND_URL: str = "http://localhost:3000"
+
     @property
     def cors_origins_list(self) -> list[str]:
         if self.CORS_ORIGINS.strip() == "*":
