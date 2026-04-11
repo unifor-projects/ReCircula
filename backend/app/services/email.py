@@ -23,10 +23,11 @@ def _build_verification_email(destinatario: str, nome: str, token: str) -> MIMEM
         f"Clique no link abaixo para confirmar seu e-mail:\n\n{link}\n\n"
         "Se você não criou esta conta, ignore este e-mail."
     )
+    nome_escaped = escape(nome)
     html = f"""\
 <html>
   <body>
-    <p>Olá, <strong>{nome}</strong>!</p>
+    <p>Olá, <strong>{nome_escaped}</strong>!</p>
     <p>Obrigado por se cadastrar na <strong>Plataforma de Doação e Troca</strong>.</p>
     <p>
       <a href="{link}">Clique aqui para confirmar seu e-mail</a>
