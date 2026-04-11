@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -9,8 +10,10 @@ from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
     EmailVerificationRequest,
+    ForgotPasswordRequest,
     RegisterResponse,
     RefreshRequest,
+    ResetPasswordRequest,
     Token,
     TokenPair,
     UsuarioCreate,
@@ -23,9 +26,10 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.services.email import send_verification_email
+from app.services.email import send_password_reset_email, send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
+PASSWORD_RESET_TOKEN_EXPIRE_HOURS = 1
 
 
 @router.post(
@@ -178,6 +182,89 @@ def _get_user_from_refresh_token(refresh_token: str, db: Session) -> Usuario:
             detail="Refresh token inválido",
         )
     return usuario
+
+
+@router.post("/forgot-password", summary="Solicitar redefinição de senha")
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    usuario = (
+        db.query(Usuario)
+        .filter(
+            Usuario.email == payload.email,
+            Usuario.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if usuario:
+        token_reset = secrets.token_urlsafe(32)
+        usuario.token_reset_senha = hash_password(token_reset)
+        usuario.token_reset_expira_em = datetime.now(timezone.utc) + timedelta(
+            hours=PASSWORD_RESET_TOKEN_EXPIRE_HOURS
+        )
+        db.commit()
+
+        background_tasks.add_task(
+            send_password_reset_email,
+            destinatario=usuario.email,
+            nome=usuario.nome,
+            token=token_reset,
+        )
+
+    return {
+        "detail": (
+            "Se o e-mail estiver cadastrado, você receberá instruções para redefinir a senha"
+        )
+    }
+
+
+@router.post("/reset-password", summary="Redefinir senha com token")
+def reset_password(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    usuarios_com_token = (
+        db.query(Usuario)
+        .filter(
+            Usuario.token_reset_senha.is_not(None),
+            Usuario.token_reset_expira_em.is_not(None),
+            Usuario.is_active.is_(True),
+        )
+        .all()
+    )
+
+    agora = datetime.now(timezone.utc)
+    usuario_encontrado = None
+    for usuario in usuarios_com_token:
+        expira_em = usuario.token_reset_expira_em
+        if expira_em is None:
+            continue
+        if expira_em.tzinfo is None:
+            expira_em = expira_em.replace(tzinfo=timezone.utc)
+        if expira_em <= agora:
+            continue
+        try:
+            if verify_password(payload.token, usuario.token_reset_senha):
+                usuario_encontrado = usuario
+                break
+        except ValueError:
+            continue
+
+    if not usuario_encontrado:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de redefinição inválido ou expirado",
+        )
+
+    usuario_encontrado.senha_hash = hash_password(payload.nova_senha)
+    usuario_encontrado.token_reset_senha = None
+    usuario_encontrado.token_reset_expira_em = None
+    db.commit()
+
+    return {"detail": "Senha redefinida com sucesso"}
 
 
 @router.post("/login", response_model=TokenPair, summary="Login com e-mail e senha")

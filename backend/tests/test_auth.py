@@ -1,7 +1,8 @@
 """Basic tests for POST /auth/registrar and POST /auth/login."""
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from app.core.security import verify_password
+from app.core.security import hash_password, verify_password
 from app.models.usuario import Usuario
 
 
@@ -10,6 +11,8 @@ LOGIN_URL = "/auth/login"
 LOGOUT_URL = "/auth/logout"
 REFRESH_URL = "/auth/refresh"
 VERIFY_EMAIL_URL = "/auth/verificar-email"
+FORGOT_PASSWORD_URL = "/auth/forgot-password"
+RESET_PASSWORD_URL = "/auth/reset-password"
 
 VALID_PAYLOAD = {
     "nome": "João Silva",
@@ -250,3 +253,85 @@ class TestLogin:
 
         refresh_resp = client.post(REFRESH_URL, json={"refresh_token": refresh_token})
         assert refresh_resp.status_code == 401
+
+
+class TestRecuperacaoSenha:
+    def _register_and_verify(self, client):
+        with patch("app.routers.auth.send_verification_email") as mock_send:
+            resp = client.post(REGISTER_URL, json=VALID_PAYLOAD)
+        assert resp.status_code == 201
+        token = mock_send.call_args.kwargs["token"]
+        verify_resp = client.post(VERIFY_EMAIL_URL, json={"token": token})
+        assert verify_resp.status_code == 200
+
+    def test_forgot_password_gera_token_e_envia_email(self, client, db_session):
+        self._register_and_verify(client)
+
+        with patch("app.routers.auth.send_password_reset_email") as mock_send:
+            resp = client.post(FORGOT_PASSWORD_URL, json={"email": VALID_PAYLOAD["email"]})
+
+        assert resp.status_code == 200
+        mock_send.assert_called_once()
+        token_plain = mock_send.call_args.kwargs["token"]
+
+        usuario = db_session.query(Usuario).filter(Usuario.email == VALID_PAYLOAD["email"]).first()
+        assert usuario is not None
+        assert usuario.token_reset_senha is not None
+        assert usuario.token_reset_senha != token_plain
+        assert verify_password(token_plain, usuario.token_reset_senha)
+        assert usuario.token_reset_expira_em is not None
+
+    def test_forgot_password_email_inexistente_retorna_200(self, client):
+        with patch("app.routers.auth.send_password_reset_email") as mock_send:
+            resp = client.post(FORGOT_PASSWORD_URL, json={"email": "inexistente@example.com"})
+
+        assert resp.status_code == 200
+        mock_send.assert_not_called()
+
+    def test_reset_password_com_token_valido_altera_senha(self, client, db_session):
+        self._register_and_verify(client)
+        with patch("app.routers.auth.send_password_reset_email") as mock_send:
+            forgot_resp = client.post(FORGOT_PASSWORD_URL, json={"email": VALID_PAYLOAD["email"]})
+        assert forgot_resp.status_code == 200
+        token = mock_send.call_args.kwargs["token"]
+
+        nova_senha = "novaSenha123"
+        reset_resp = client.post(
+            RESET_PASSWORD_URL,
+            json={"token": token, "nova_senha": nova_senha},
+        )
+        assert reset_resp.status_code == 200
+        usuario = db_session.query(Usuario).filter(Usuario.email == VALID_PAYLOAD["email"]).first()
+        assert usuario is not None
+        assert usuario.senha_hash != nova_senha
+        assert verify_password(nova_senha, usuario.senha_hash)
+        assert usuario.token_reset_senha is None
+        assert usuario.token_reset_expira_em is None
+
+        login_antigo = client.post(
+            LOGIN_URL,
+            data={"username": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["senha"]},
+        )
+        login_novo = client.post(
+            LOGIN_URL,
+            data={"username": VALID_PAYLOAD["email"], "password": nova_senha},
+        )
+        assert login_antigo.status_code == 401
+        assert login_novo.status_code == 200
+
+    def test_reset_password_token_expirado_retorna_400(self, client, db_session):
+        self._register_and_verify(client)
+
+        usuario = db_session.query(Usuario).filter(Usuario.email == VALID_PAYLOAD["email"]).first()
+        assert usuario is not None
+        token = "token-expirado-de-redefinicao"
+        usuario.token_reset_senha = hash_password(token)
+        usuario.token_reset_expira_em = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db_session.commit()
+
+        resp = client.post(
+            RESET_PASSWORD_URL,
+            json={"token": token, "nova_senha": "novaSenha123"},
+        )
+        assert resp.status_code == 400
+        assert "inválido ou expirado" in resp.json()["detail"].lower()

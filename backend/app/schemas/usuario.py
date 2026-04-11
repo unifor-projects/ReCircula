@@ -69,3 +69,12 @@ class TokenData(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(..., min_length=10)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., examples=["joao@email.com"])
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=10)
+    nova_senha: str = Field(..., min_length=6, examples=["novaSenha123"])

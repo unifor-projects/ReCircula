@@ -24,6 +24,10 @@ class Usuario(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verificado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     token_verificacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    token_reset_senha: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    token_reset_expira_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     refresh_token_version: Mapped[int] = mapped_column(
         default=0, server_default=text("0"), nullable=False
     )
