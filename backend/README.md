@@ -29,7 +29,7 @@ cp .env.example .env        # edite DATABASE_URL e SECRET_KEY
 
 ```bash
 # Criar o banco no PostgreSQL
-createdb doacao_troca
+createdb recircula_db
 
 # Executar as migrações (Alembic)
 uv run alembic upgrade head

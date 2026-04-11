@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "*"
 
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/doacao_troca"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/recircula_db"
 
     # JWT – SECRET_KEY must be set in production via environment variable
     SECRET_KEY: str = secrets.token_urlsafe(32)

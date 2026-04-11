@@ -32,6 +32,7 @@ def registrar(
             detail="E-mail já cadastrado",
         )
     token_verificacao = secrets.token_urlsafe(32)
+    token_hash = hash_password(token_verificacao)
     novo = Usuario(
         nome=usuario.nome,
         email=usuario.email,
