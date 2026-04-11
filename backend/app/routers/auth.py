@@ -29,7 +29,7 @@ from app.core.security import (
 from app.services.email import send_password_reset_email, send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
-PASSWORD_RESET_TOKEN_EXPIRE_HOURS = 1
+_PASSWORD_RESET_TOKEN_EXPIRE_HOURS = 1
 
 
 @router.post(
@@ -204,7 +204,7 @@ def forgot_password(
         token_enviado = f"{usuario.id}.{token_reset}"
         usuario.token_reset_senha = hash_password(token_reset)
         usuario.token_reset_expira_em = datetime.now(timezone.utc) + timedelta(
-            hours=PASSWORD_RESET_TOKEN_EXPIRE_HOURS
+            hours=_PASSWORD_RESET_TOKEN_EXPIRE_HOURS
         )
         db.commit()
 
@@ -256,7 +256,7 @@ def reset_password(
 
     try:
         token_valido = verify_password(token_bruto, usuario.token_reset_senha)
-    except ValueError:
+    except Exception:
         token_valido = False
 
     if not token_valido:

@@ -72,6 +72,7 @@ def send_verification_email(destinatario: str, nome: str, token: str) -> None:
 
 def _build_password_reset_email(destinatario: str, nome: str, token: str) -> MIMEMultipart:
     link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+    link_escaped = escape(link, quote=True)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "Redefina sua senha – Plataforma de Doação e Troca"
@@ -91,7 +92,7 @@ def _build_password_reset_email(destinatario: str, nome: str, token: str) -> MIM
     <p>Olá, <strong>{nome_escaped}</strong>!</p>
     <p>Recebemos uma solicitação para redefinir sua senha.</p>
     <p>
-      <a href="{link}">Clique aqui para criar uma nova senha</a>
+      <a href="{link_escaped}">Clique aqui para criar uma nova senha</a>
     </p>
     <p style="font-size:0.85em;color:#666;">
       Este link expira em 1 hora. Se você não solicitou, ignore este email.
