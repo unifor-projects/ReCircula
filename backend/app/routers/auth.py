@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.usuario import Usuario
-from app.schemas.usuario import RegisterResponse, Token, UsuarioCreate, UsuarioResponse
+from app.schemas.usuario import (
+    EmailVerificationRequest,
+    RegisterResponse,
+    Token,
+    UsuarioCreate,
+    UsuarioResponse,
+)
 from app.core.security import hash_password, verify_password, create_access_token
 from app.services.email import send_verification_email
 
@@ -37,7 +43,7 @@ def registrar(
         nome=usuario.nome,
         email=usuario.email,
         senha_hash=hash_password(usuario.senha),
-        token_verificacao=token_verificacao,
+        token_verificacao=token_hash,
     )
     db.add(novo)
     db.commit()
@@ -58,6 +64,44 @@ def registrar(
     )
 
 
+@router.post("/verificar-email", summary="Verificar e-mail")
+def verificar_email(
+    payload: EmailVerificationRequest,
+    db: Session = Depends(get_db),
+):
+    """Marca o e-mail como verificado a partir de um token válido."""
+    usuarios_pendentes = (
+        db.query(Usuario)
+        .filter(
+            Usuario.email_verificado.is_(False),
+            Usuario.token_verificacao.is_not(None),
+        )
+        .all()
+    )
+
+    usuario_encontrado = None
+    for usuario in usuarios_pendentes:
+        try:
+            if verify_password(payload.token, usuario.token_verificacao):
+                usuario_encontrado = usuario
+                break
+        except ValueError:
+            # Ignora valores legados em formato não BCrypt.
+            continue
+
+    if not usuario_encontrado:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de verificação inválido",
+        )
+
+    usuario_encontrado.email_verificado = True
+    usuario_encontrado.token_verificacao = None
+    db.commit()
+
+    return {"detail": "E-mail verificado com sucesso"}
+
+
 @router.post("/token", response_model=Token, summary="Login – obter token JWT")
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -70,6 +114,11 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="E-mail ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not usuario.email_verificado:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="E-mail ainda não verificado",
         )
     if not usuario.is_active:
         raise HTTPException(

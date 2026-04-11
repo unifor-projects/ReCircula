@@ -1,9 +1,13 @@
 """Basic tests for POST /auth/registrar and POST /auth/token."""
 from unittest.mock import patch
 
+from app.core.security import verify_password
+from app.models.usuario import Usuario
+
 
 REGISTER_URL = "/auth/registrar"
 TOKEN_URL = "/auth/token"
+VERIFY_EMAIL_URL = "/auth/verificar-email"
 
 VALID_PAYLOAD = {
     "nome": "João Silva",
@@ -110,19 +114,71 @@ class TestRegistrar:
         assert call_kwargs.kwargs["nome"] == VALID_PAYLOAD["nome"]
         assert call_kwargs.kwargs["token"]  # token must be a non-empty string
 
+    def test_token_de_verificacao_salvo_como_hash(self, client, db_session):
+        """O token de verificação persistido deve estar hasheado no banco."""
+        with patch("app.routers.auth.send_verification_email") as mock_send:
+            resp = client.post(REGISTER_URL, json=VALID_PAYLOAD)
+
+        assert resp.status_code == 201
+        token_plain = mock_send.call_args.kwargs["token"]
+
+        usuario = db_session.query(Usuario).filter(Usuario.email == VALID_PAYLOAD["email"]).first()
+        assert usuario is not None
+        assert usuario.token_verificacao is not None
+        assert usuario.token_verificacao != token_plain
+        assert verify_password(token_plain, usuario.token_verificacao)
+
+
+class TestVerificarEmail:
+    def _register_and_get_token(self, client):
+        with patch("app.routers.auth.send_verification_email") as mock_send:
+            resp = client.post(REGISTER_URL, json=VALID_PAYLOAD)
+        assert resp.status_code == 201
+        return mock_send.call_args.kwargs["token"]
+
+    def test_verificar_email_token_valido(self, client):
+        """Token válido deve marcar o e-mail como verificado."""
+        token = self._register_and_get_token(client)
+
+        resp = client.post(VERIFY_EMAIL_URL, json={"token": token})
+
+        assert resp.status_code == 200
+        assert "sucesso" in resp.json()["detail"].lower()
+
+    def test_verificar_email_token_invalido(self, client):
+        """Token inválido deve retornar erro 400."""
+        self._register_and_get_token(client)
+
+        resp = client.post(VERIFY_EMAIL_URL, json={"token": "token-invalido"})
+
+        assert resp.status_code == 400
+        assert "inválido" in resp.json()["detail"].lower()
+
+    def test_token_nao_pode_ser_reutilizado(self, client):
+        """Após verificação com sucesso, o mesmo token não deve funcionar novamente."""
+        token = self._register_and_get_token(client)
+
+        primeira = client.post(VERIFY_EMAIL_URL, json={"token": token})
+        segunda = client.post(VERIFY_EMAIL_URL, json={"token": token})
+
+        assert primeira.status_code == 200
+        assert segunda.status_code == 400
+
 
 # ---------------------------------------------------------------------------
 # POST /auth/token
 # ---------------------------------------------------------------------------
 
 class TestLogin:
-    def _register(self, client):
-        with patch("app.routers.auth.send_verification_email"):
+    def _register_and_verify(self, client):
+        with patch("app.routers.auth.send_verification_email") as mock_send:
             client.post(REGISTER_URL, json=VALID_PAYLOAD)
+        token = mock_send.call_args.kwargs["token"]
+        client.post(VERIFY_EMAIL_URL, json={"token": token})
 
     def test_login_bem_sucedido(self, client):
         """Login com credenciais corretas deve retornar token."""
-        self._register(client)
+        self._register_and_verify(client)
         resp = client.post(
             TOKEN_URL,
             data={"username": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["senha"]},
@@ -134,12 +190,25 @@ class TestLogin:
 
     def test_login_senha_errada_retorna_401(self, client):
         """Login com senha errada deve retornar 401."""
-        self._register(client)
+        self._register_and_verify(client)
         resp = client.post(
             TOKEN_URL,
             data={"username": VALID_PAYLOAD["email"], "password": "errada"},
         )
         assert resp.status_code == 401
+
+    def test_login_email_nao_verificado_retorna_403(self, client):
+        """Login deve falhar enquanto o e-mail não for verificado."""
+        with patch("app.routers.auth.send_verification_email"):
+            client.post(REGISTER_URL, json=VALID_PAYLOAD)
+
+        resp = client.post(
+            TOKEN_URL,
+            data={"username": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["senha"]},
+        )
+
+        assert resp.status_code == 403
+        assert "não verificado" in resp.json()["detail"].lower()
 
     def test_login_email_inexistente_retorna_401(self, client):
         """Login com e-mail não cadastrado deve retornar 401."""
