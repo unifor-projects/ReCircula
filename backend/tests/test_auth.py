@@ -272,7 +272,8 @@ class TestRecuperacaoSenha:
 
         assert resp.status_code == 200
         mock_send.assert_called_once()
-        token_plain = mock_send.call_args.kwargs["token"]
+        token_enviado = mock_send.call_args.kwargs["token"]
+        token_plain = token_enviado.split(".", 1)[1]
 
         usuario = db_session.query(Usuario).filter(Usuario.email == VALID_PAYLOAD["email"]).first()
         assert usuario is not None
@@ -324,8 +325,9 @@ class TestRecuperacaoSenha:
 
         usuario = db_session.query(Usuario).filter(Usuario.email == VALID_PAYLOAD["email"]).first()
         assert usuario is not None
-        token = "token-expirado-de-redefinicao"
-        usuario.token_reset_senha = hash_password(token)
+        token_bruto = "token-expirado-de-redefinicao"
+        token = f"{usuario.id}.{token_bruto}"
+        usuario.token_reset_senha = hash_password(token_bruto)
         usuario.token_reset_expira_em = datetime.now(timezone.utc) - timedelta(minutes=1)
         db_session.commit()
 

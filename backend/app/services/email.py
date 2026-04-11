@@ -82,7 +82,7 @@ def _build_password_reset_email(destinatario: str, nome: str, token: str) -> MIM
         f"Olá, {nome}!\n\n"
         "Recebemos uma solicitação para redefinir sua senha.\n"
         f"Clique no link abaixo para criar uma nova senha:\n\n{link}\n\n"
-        "Este link expira em 1 hora. Se você não solicitou, ignore este e-mail."
+        "Este link expira em 1 hora. Se você não solicitou, ignore este email."
     )
     nome_escaped = escape(nome)
     html = f"""\
@@ -94,7 +94,7 @@ def _build_password_reset_email(destinatario: str, nome: str, token: str) -> MIM
       <a href="{link}">Clique aqui para criar uma nova senha</a>
     </p>
     <p style="font-size:0.85em;color:#666;">
-      Este link expira em 1 hora. Se você não solicitou, ignore este e-mail.
+      Este link expira em 1 hora. Se você não solicitou, ignore este email.
     </p>
   </body>
 </html>"""

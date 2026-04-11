@@ -201,6 +201,7 @@ def forgot_password(
 
     if usuario:
         token_reset = secrets.token_urlsafe(32)
+        token_enviado = f"{usuario.id}.{token_reset}"
         usuario.token_reset_senha = hash_password(token_reset)
         usuario.token_reset_expira_em = datetime.now(timezone.utc) + timedelta(
             hours=PASSWORD_RESET_TOKEN_EXPIRE_HOURS
@@ -211,7 +212,7 @@ def forgot_password(
             send_password_reset_email,
             destinatario=usuario.email,
             nome=usuario.nome,
-            token=token_reset,
+            token=token_enviado,
         )
 
     return {
@@ -226,35 +227,47 @@ def reset_password(
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
+    try:
+        user_id_str, token_bruto = payload.token.split(".", 1)
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de redefinição inválido ou expirado",
+        ) from None
+
     agora = datetime.now(timezone.utc)
-    usuarios_com_token = (
+    usuario = (
         db.query(Usuario)
         .filter(
+            Usuario.id == user_id,
             Usuario.token_reset_senha.is_not(None),
             Usuario.token_reset_expira_em > agora,
             Usuario.is_active.is_(True),
         )
-        .all()
+        .first()
     )
 
-    usuario_encontrado = None
-    for usuario in usuarios_com_token:
-        try:
-            if verify_password(payload.token, usuario.token_reset_senha):
-                usuario_encontrado = usuario
-                break
-        except ValueError:
-            continue
-
-    if not usuario_encontrado:
+    if not usuario:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token de redefinição inválido ou expirado",
         )
 
-    usuario_encontrado.senha_hash = hash_password(payload.nova_senha)
-    usuario_encontrado.token_reset_senha = None
-    usuario_encontrado.token_reset_expira_em = None
+    try:
+        token_valido = verify_password(token_bruto, usuario.token_reset_senha)
+    except ValueError:
+        token_valido = False
+
+    if not token_valido:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de redefinição inválido ou expirado",
+        )
+
+    usuario.senha_hash = hash_password(payload.nova_senha)
+    usuario.token_reset_senha = None
+    usuario.token_reset_expira_em = None
     db.commit()
 
     return {"detail": "Senha redefinida com sucesso"}
