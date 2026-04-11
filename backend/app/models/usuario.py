@@ -24,6 +24,7 @@ class Usuario(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verificado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     token_verificacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    refresh_token_version: Mapped[int] = mapped_column(default=0, nullable=False)
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

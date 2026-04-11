@@ -7,6 +7,9 @@ from app.models.usuario import Usuario
 
 REGISTER_URL = "/auth/registrar"
 TOKEN_URL = "/auth/token"
+LOGIN_URL = "/auth/login"
+LOGOUT_URL = "/auth/logout"
+REFRESH_URL = "/auth/refresh"
 VERIFY_EMAIL_URL = "/auth/verificar-email"
 
 VALID_PAYLOAD = {
@@ -217,3 +220,46 @@ class TestLogin:
             data={"username": "naoexiste@example.com", "password": "qualquer"},
         )
         assert resp.status_code == 401
+
+    def test_login_json_retorna_access_e_refresh_token(self, client):
+        """POST /auth/login deve retornar access_token e refresh_token."""
+        self._register_and_verify(client)
+        resp = client.post(
+            LOGIN_URL,
+            json={"email": VALID_PAYLOAD["email"], "senha": VALID_PAYLOAD["senha"]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_refresh_retorna_novo_access_token(self, client):
+        """POST /auth/refresh deve renovar o access token usando refresh válido."""
+        self._register_and_verify(client)
+        login_resp = client.post(
+            LOGIN_URL,
+            json={"email": VALID_PAYLOAD["email"], "senha": VALID_PAYLOAD["senha"]},
+        )
+        refresh_token = login_resp.json()["refresh_token"]
+
+        resp = client.post(REFRESH_URL, json={"refresh_token": refresh_token})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_logout_invalida_refresh_token(self, client):
+        """Após logout, refresh token anterior não deve mais funcionar."""
+        self._register_and_verify(client)
+        login_resp = client.post(
+            LOGIN_URL,
+            json={"email": VALID_PAYLOAD["email"], "senha": VALID_PAYLOAD["senha"]},
+        )
+        refresh_token = login_resp.json()["refresh_token"]
+
+        logout_resp = client.post(LOGOUT_URL, json={"refresh_token": refresh_token})
+        assert logout_resp.status_code == 200
+
+        refresh_resp = client.post(REFRESH_URL, json={"refresh_token": refresh_token})
+        assert refresh_resp.status_code == 401

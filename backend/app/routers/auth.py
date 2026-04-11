@@ -8,12 +8,21 @@ from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
     EmailVerificationRequest,
+    LoginRequest,
     RegisterResponse,
+    RefreshRequest,
     Token,
+    TokenPair,
     UsuarioCreate,
     UsuarioResponse,
 )
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from app.services.email import send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
@@ -126,3 +135,109 @@ def login(
         )
     token = create_access_token({"sub": str(usuario.id)})
     return {"access_token": token, "token_type": "bearer"}
+
+
+def _authenticate_user(email: str, senha: str, db: Session) -> Usuario:
+    usuario = db.query(Usuario).filter(Usuario.email == email).first()
+    if not usuario or not verify_password(senha, usuario.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="E-mail ou senha incorretos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not usuario.email_verificado:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="E-mail ainda não verificado",
+        )
+    if not usuario.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta desativada",
+        )
+    return usuario
+
+
+def _build_token_pair(usuario: Usuario) -> TokenPair:
+    access_token = create_access_token({"sub": str(usuario.id)})
+    refresh_token = create_refresh_token(
+        {"sub": str(usuario.id), "token_version": usuario.refresh_token_version}
+    )
+    return TokenPair(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+
+@router.post("/login", response_model=TokenPair, summary="Login com e-mail e senha")
+def login_json(payload: LoginRequest, db: Session = Depends(get_db)):
+    usuario = _authenticate_user(payload.email, payload.senha, db)
+    return _build_token_pair(usuario)
+
+
+@router.post("/refresh", response_model=Token, summary="Renovar access token")
+def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
+    token_payload = decode_token(payload.refresh_token)
+    if not token_payload or token_payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+
+    user_id = token_payload.get("sub")
+    token_version = token_payload.get("token_version")
+    if user_id is None or token_version is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+
+    usuario = db.get(Usuario, int(user_id))
+    if not usuario or not usuario.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+    if token_version != usuario.refresh_token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+
+    access_token = create_access_token({"sub": str(usuario.id)})
+    return Token(access_token=access_token, token_type="bearer")
+
+
+@router.post("/logout", summary="Logout do usuário")
+def logout(payload: RefreshRequest, db: Session = Depends(get_db)):
+    token_payload = decode_token(payload.refresh_token)
+    if not token_payload or token_payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+
+    user_id = token_payload.get("sub")
+    token_version = token_payload.get("token_version")
+    if user_id is None or token_version is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+
+    usuario = db.get(Usuario, int(user_id))
+    if not usuario or not usuario.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+    if token_version != usuario.refresh_token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+
+    usuario.refresh_token_version += 1
+    db.commit()
+    return {"detail": "Logout realizado com sucesso"}
