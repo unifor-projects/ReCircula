@@ -6,8 +6,7 @@ services:
       - backend/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # ports configuradas apenas no override para dev
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -19,8 +18,7 @@ services:
     restart: unless-stopped
     env_file:
       - backend/.env
-    ports:
-      - "8000:8000"
+    # ports configuradas apenas no override para dev
     depends_on:
       db:
         condition: service_healthy

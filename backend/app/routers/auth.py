@@ -9,7 +9,6 @@ from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
     EmailVerificationRequest,
-    LoginRequest,
     RegisterResponse,
     RefreshRequest,
     Token,
@@ -111,33 +110,6 @@ def verificar_email(
     return {"detail": "E-mail verificado com sucesso"}
 
 
-@router.post("/token", response_model=Token, summary="Login – obter token JWT")
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
-):
-    """Autentica o usuário com e-mail e senha, retornando um token JWT Bearer."""
-    usuario = db.query(Usuario).filter(Usuario.email == form_data.username).first()
-    if not usuario or not verify_password(form_data.password, usuario.senha_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-mail ou senha incorretos",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not usuario.email_verificado:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="E-mail ainda não verificado",
-        )
-    if not usuario.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Conta desativada",
-        )
-    token = create_access_token({"sub": str(usuario.id)})
-    return {"access_token": token, "token_type": "bearer"}
-
-
 def _authenticate_user(email: str, senha: str, db: Session) -> Usuario:
     usuario = db.query(Usuario).filter(Usuario.email == email).first()
     if not usuario or not verify_password(senha, usuario.senha_hash):
@@ -209,8 +181,11 @@ def _get_user_from_refresh_token(refresh_token: str, db: Session) -> Usuario:
 
 
 @router.post("/login", response_model=TokenPair, summary="Login com e-mail e senha")
-def login_json(payload: LoginRequest, db: Session = Depends(get_db)):
-    usuario = _authenticate_user(payload.email, payload.senha, db)
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    usuario = _authenticate_user(form_data.username, form_data.password, db)
     return _build_token_pair(usuario)
 
 

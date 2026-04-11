@@ -103,7 +103,7 @@ Após iniciar o servidor, acesse:
 
 | RF  | Descrição                              | Endpoint(s)                        |
 |-----|----------------------------------------|------------------------------------|
-| RF01| Cadastro, login e sessão               | `POST /auth/registrar`, `POST /auth/token` |
+| RF01| Cadastro, login e sessão               | `POST /auth/registrar`, `POST /auth/login` |
 | RF02| Perfil do usuário                      | `GET /usuarios/me`, `PUT /usuarios/me` |
 | RF03| Criação e gestão de anúncios           | `POST /anuncios`, `PUT /anuncios/{id}` |
 | RF04| Busca e filtragem                      | `GET /anuncios?q=&categoria_id=&cep=` |

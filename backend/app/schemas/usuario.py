@@ -67,10 +67,5 @@ class TokenData(BaseModel):
     sub: Optional[str] = None
 
 
-class LoginRequest(BaseModel):
-    email: EmailStr
-    senha: str = Field(..., min_length=6)
-
-
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(..., min_length=10)
