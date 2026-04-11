@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Plataforma de Doacao e Troca - Frontend
 
-## Getting Started
+Frontend do projeto ReCircula, construido com Next.js.
 
-First, run the development server:
+## Requisitos
+
+- Node.js 20+
+- npm
+
+## Instalacao
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd frontend
+npm install
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Variaveis de Ambiente
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- O frontend usa `frontend/.env`.
+- O arquivo de exemplo e `frontend/.env.example`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Variavel usada atualmente:
 
-## Learn More
+- `NEXT_PUBLIC_API_URL` (URL publica da API consumida no navegador)
 
-To learn more about Next.js, take a look at the following resources:
+## Executar em desenvolvimento
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+cd frontend
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+A aplicacao fica disponivel em `http://localhost:3000`.
 
-## Deploy on Vercel
+## Executar com Docker Compose
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Na raiz do repositorio:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+docker compose up --build
+```
+
+Observacao:
+
+- O serviço `frontend` no Compose carrega `frontend/.env`.

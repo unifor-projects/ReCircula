@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,6 +24,9 @@ class Usuario(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verificado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     token_verificacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    refresh_token_version: Mapped[int] = mapped_column(
+        default=0, server_default=text("0"), nullable=False
+    )
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

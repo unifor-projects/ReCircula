@@ -2,16 +2,13 @@ services:
   db:
     image: postgres:15-alpine
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-recircula_db}
+    env_file:
+      - backend/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # ports configuradas apenas no override para dev
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,9 +17,8 @@ services:
     build: ./backend
     restart: unless-stopped
     env_file:
-      - .env
-    ports:
-      - "8000:8000"
+      - backend/.env
+    # ports configuradas apenas no override para dev
     depends_on:
       db:
         condition: service_healthy
@@ -34,7 +30,7 @@ services:
     build: ./frontend
     restart: unless-stopped
     env_file:
-      - .env
+      - frontend/.env
     ports:
       - "3000:3000"
     depends_on:

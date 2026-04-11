@@ -25,6 +25,22 @@ uv sync --group dev
 cp .env.example .env        # edite DATABASE_URL e SECRET_KEY
 ```
 
+## Variáveis de Ambiente
+
+- O backend usa `backend/.env`.
+- O arquivo de exemplo é `backend/.env.example`.
+- No fluxo com Docker Compose, o serviço `db` e o serviço `backend` carregam o mesmo `backend/.env`.
+
+Variáveis obrigatórias mais comuns:
+
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `ALGORITHM`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` (usadas pelo serviço de banco no Compose)
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_TLS` (opcionais)
+- `FRONTEND_URL`
+
 ## Banco de dados
 
 ```bash
@@ -43,6 +59,18 @@ uv run alembic revision --autogenerate -m "descricao da mudança"
 ```bash
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+## Executar com Docker Compose
+
+Na raiz do repositório:
+
+```bash
+docker compose up --build
+```
+
+Observação:
+
+- O projeto não depende mais de `.env` na raiz para subir os serviços.
 
 ## Testes
 
@@ -75,7 +103,7 @@ Após iniciar o servidor, acesse:
 
 | RF  | Descrição                              | Endpoint(s)                        |
 |-----|----------------------------------------|------------------------------------|
-| RF01| Cadastro, login e sessão               | `POST /auth/registrar`, `POST /auth/token` |
+| RF01| Cadastro, login e sessão               | `POST /auth/registrar`, `POST /auth/login` |
 | RF02| Perfil do usuário                      | `GET /usuarios/me`, `PUT /usuarios/me` |
 | RF03| Criação e gestão de anúncios           | `POST /anuncios`, `PUT /anuncios/{id}` |
 | RF04| Busca e filtragem                      | `GET /anuncios?q=&categoria_id=&cep=` |

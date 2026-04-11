@@ -1,0 +1,9 @@
+services:
+  db:
+    ports:
+      - "5432:5432"
+  backend:
+    ports:
+      - "8000:8000"
+# Este arquivo expõe as portas apenas em desenvolvimento.
+# Não use em produção!

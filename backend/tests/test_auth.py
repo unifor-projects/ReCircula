@@ -1,4 +1,4 @@
-"""Basic tests for POST /auth/registrar and POST /auth/token."""
+"""Basic tests for POST /auth/registrar and POST /auth/login."""
 from unittest.mock import patch
 
 from app.core.security import verify_password
@@ -6,7 +6,9 @@ from app.models.usuario import Usuario
 
 
 REGISTER_URL = "/auth/registrar"
-TOKEN_URL = "/auth/token"
+LOGIN_URL = "/auth/login"
+LOGOUT_URL = "/auth/logout"
+REFRESH_URL = "/auth/refresh"
 VERIFY_EMAIL_URL = "/auth/verificar-email"
 
 VALID_PAYLOAD = {
@@ -166,7 +168,7 @@ class TestVerificarEmail:
 
 
 # ---------------------------------------------------------------------------
-# POST /auth/token
+# POST /auth/login
 # ---------------------------------------------------------------------------
 
 class TestLogin:
@@ -180,19 +182,20 @@ class TestLogin:
         """Login com credenciais corretas deve retornar token."""
         self._register_and_verify(client)
         resp = client.post(
-            TOKEN_URL,
+            LOGIN_URL,
             data={"username": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["senha"]},
         )
         assert resp.status_code == 200
         data = resp.json()
         assert "access_token" in data
+        assert "refresh_token" in data
         assert data["token_type"] == "bearer"
 
     def test_login_senha_errada_retorna_401(self, client):
         """Login com senha errada deve retornar 401."""
         self._register_and_verify(client)
         resp = client.post(
-            TOKEN_URL,
+            LOGIN_URL,
             data={"username": VALID_PAYLOAD["email"], "password": "errada"},
         )
         assert resp.status_code == 401
@@ -203,7 +206,7 @@ class TestLogin:
             client.post(REGISTER_URL, json=VALID_PAYLOAD)
 
         resp = client.post(
-            TOKEN_URL,
+            LOGIN_URL,
             data={"username": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["senha"]},
         )
 
@@ -213,7 +216,37 @@ class TestLogin:
     def test_login_email_inexistente_retorna_401(self, client):
         """Login com e-mail não cadastrado deve retornar 401."""
         resp = client.post(
-            TOKEN_URL,
+            LOGIN_URL,
             data={"username": "naoexiste@example.com", "password": "qualquer"},
         )
         assert resp.status_code == 401
+
+    def test_refresh_retorna_novo_access_token(self, client):
+        """POST /auth/refresh deve renovar o access token usando refresh válido."""
+        self._register_and_verify(client)
+        login_resp = client.post(
+            LOGIN_URL,
+            data={"username": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["senha"]},
+        )
+        refresh_token = login_resp.json()["refresh_token"]
+
+        resp = client.post(REFRESH_URL, json={"refresh_token": refresh_token})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_logout_invalida_refresh_token(self, client):
+        """Após logout, refresh token anterior não deve mais funcionar."""
+        self._register_and_verify(client)
+        login_resp = client.post(
+            LOGIN_URL,
+            data={"username": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["senha"]},
+        )
+        refresh_token = login_resp.json()["refresh_token"]
+
+        logout_resp = client.post(LOGOUT_URL, json={"refresh_token": refresh_token})
+        assert logout_resp.status_code == 200
+
+        refresh_resp = client.post(REFRESH_URL, json={"refresh_token": refresh_token})
+        assert refresh_resp.status_code == 401

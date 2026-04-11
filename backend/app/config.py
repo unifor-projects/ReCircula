@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     # JWT – SECRET_KEY must be set in production via environment variable
     SECRET_KEY: str = secrets.token_urlsafe(32)
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Email (SMTP) – leave SMTP_HOST empty to disable email sending
     SMTP_HOST: str = ""

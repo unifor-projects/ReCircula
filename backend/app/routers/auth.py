@@ -2,6 +2,7 @@ import secrets
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,11 +10,19 @@ from app.models.usuario import Usuario
 from app.schemas.usuario import (
     EmailVerificationRequest,
     RegisterResponse,
+    RefreshRequest,
     Token,
+    TokenPair,
     UsuarioCreate,
     UsuarioResponse,
 )
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from app.services.email import send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
@@ -101,14 +110,9 @@ def verificar_email(
     return {"detail": "E-mail verificado com sucesso"}
 
 
-@router.post("/token", response_model=Token, summary="Login – obter token JWT")
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
-):
-    """Autentica o usuário com e-mail e senha, retornando um token JWT Bearer."""
-    usuario = db.query(Usuario).filter(Usuario.email == form_data.username).first()
-    if not usuario or not verify_password(form_data.password, usuario.senha_hash):
+def _authenticate_user(email: str, senha: str, db: Session) -> Usuario:
+    usuario = db.query(Usuario).filter(Usuario.email == email).first()
+    if not usuario or not verify_password(senha, usuario.senha_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="E-mail ou senha incorretos",
@@ -124,5 +128,84 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta desativada",
         )
-    token = create_access_token({"sub": str(usuario.id)})
-    return {"access_token": token, "token_type": "bearer"}
+    return usuario
+
+
+def _build_token_pair(usuario: Usuario) -> TokenPair:
+    access_token = create_access_token({"sub": str(usuario.id)})
+    refresh_token = create_refresh_token(
+        {"sub": str(usuario.id), "token_version": usuario.refresh_token_version}
+    )
+    return TokenPair(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+
+def _get_user_from_refresh_token(refresh_token: str, db: Session) -> Usuario:
+    token_payload = decode_token(refresh_token)
+    if not token_payload or token_payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+
+    user_id = token_payload.get("sub")
+    token_version = token_payload.get("token_version")
+    if user_id is None or token_version is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        ) from exc
+
+    usuario = db.get(Usuario, user_id_int)
+    if not usuario or not usuario.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+    if token_version != usuario.refresh_token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        )
+    return usuario
+
+
+@router.post("/login", response_model=TokenPair, summary="Login com e-mail e senha")
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    usuario = _authenticate_user(form_data.username, form_data.password, db)
+    return _build_token_pair(usuario)
+
+
+@router.post("/refresh", response_model=Token, summary="Renovar access token")
+def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
+    usuario = _get_user_from_refresh_token(payload.refresh_token, db)
+    access_token = create_access_token({"sub": str(usuario.id)})
+    return Token(access_token=access_token, token_type="bearer")
+
+
+@router.post("/logout", summary="Logout do usuário")
+def logout(payload: RefreshRequest, db: Session = Depends(get_db)):
+    usuario = _get_user_from_refresh_token(payload.refresh_token, db)
+    try:
+        usuario.refresh_token_version += 1
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao finalizar logout",
+        ) from exc
+    return {"detail": "Logout realizado com sucesso"}
