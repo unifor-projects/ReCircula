@@ -226,26 +226,19 @@ def reset_password(
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
+    agora = datetime.now(timezone.utc)
     usuarios_com_token = (
         db.query(Usuario)
         .filter(
             Usuario.token_reset_senha.is_not(None),
-            Usuario.token_reset_expira_em.is_not(None),
+            Usuario.token_reset_expira_em > agora,
             Usuario.is_active.is_(True),
         )
         .all()
     )
 
-    agora = datetime.now(timezone.utc)
     usuario_encontrado = None
     for usuario in usuarios_com_token:
-        expira_em = usuario.token_reset_expira_em
-        if expira_em is None:
-            continue
-        if expira_em.tzinfo is None:
-            expira_em = expira_em.replace(tzinfo=timezone.utc)
-        if expira_em <= agora:
-            continue
         try:
             if verify_password(payload.token, usuario.token_reset_senha):
                 usuario_encontrado = usuario

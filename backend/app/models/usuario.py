@@ -26,7 +26,7 @@ class Usuario(Base):
     token_verificacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_reset_senha: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_reset_expira_em: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True), nullable=True, index=True
     )
     refresh_token_version: Mapped[int] = mapped_column(
         default=0, server_default=text("0"), nullable=False

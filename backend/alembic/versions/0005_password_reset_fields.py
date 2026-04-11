@@ -25,8 +25,15 @@ def upgrade() -> None:
         "usuarios",
         sa.Column("token_reset_expira_em", sa.DateTime(timezone=True), nullable=True),
     )
+    op.create_index(
+        op.f("ix_usuarios_token_reset_expira_em"),
+        "usuarios",
+        ["token_reset_expira_em"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
+    op.drop_index(op.f("ix_usuarios_token_reset_expira_em"), table_name="usuarios")
     op.drop_column("usuarios", "token_reset_expira_em")
     op.drop_column("usuarios", "token_reset_senha")
