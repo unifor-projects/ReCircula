@@ -6,8 +6,8 @@ from typing import List
 from app.database import get_db
 from app.deps import get_current_user, get_current_admin
 from app.models.usuario import Usuario
-from app.models.anuncio import Anuncio, StatusAnuncio
-from app.models.denuncia import Denuncia, StatusDenuncia
+from app.models.anuncio import Anuncio
+from app.models.denuncia import Denuncia
 from app.schemas.denuncia import DenunciaCreate, DenunciaResolucao, DenunciaResponse
 
 router = APIRouter(prefix="/denuncias", tags=["Denúncias e Moderação"])

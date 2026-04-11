@@ -49,5 +49,15 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class RegisterResponse(BaseModel):
+    usuario: UsuarioResponse
+    access_token: str
+    token_type: str = "bearer"
+
+
+class EmailVerificationRequest(BaseModel):
+    token: str = Field(..., min_length=10)
+
+
 class TokenData(BaseModel):
     sub: Optional[str] = None

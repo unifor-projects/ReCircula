@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0001"
 down_revision: Union[str, Sequence[str], None] = None
@@ -81,15 +82,32 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("titulo", sa.String(length=200), nullable=False),
         sa.Column("descricao", sa.Text(), nullable=False),
-        sa.Column("tipo", sa.Enum("doacao", "troca", name="tipo_anuncio"), nullable=False),
+        sa.Column(
+            "tipo",
+            postgresql.ENUM("doacao", "troca", name="tipo_anuncio", create_type=False),
+            nullable=False,
+        ),
         sa.Column(
             "condicao",
-            sa.Enum("novo", "seminovo", "usado", "para_reparo", name="condicao_item"),
+            postgresql.ENUM(
+                "novo",
+                "seminovo",
+                "usado",
+                "para_reparo",
+                name="condicao_item",
+                create_type=False,
+            ),
             nullable=False,
         ),
         sa.Column(
             "status",
-            sa.Enum("disponivel", "reservado", "doado_trocado", name="status_anuncio"),
+            postgresql.ENUM(
+                "disponivel",
+                "reservado",
+                "doado_trocado",
+                name="status_anuncio",
+                create_type=False,
+            ),
             nullable=False,
             server_default="disponivel",
         ),
@@ -143,12 +161,24 @@ def upgrade() -> None:
         sa.Column("anuncio_id", sa.Integer(), nullable=False),
         sa.Column(
             "status_anterior",
-            sa.Enum("disponivel", "reservado", "doado_trocado", name="status_anuncio"),
+            postgresql.ENUM(
+                "disponivel",
+                "reservado",
+                "doado_trocado",
+                name="status_anuncio",
+                create_type=False,
+            ),
             nullable=True,
         ),
         sa.Column(
             "status_novo",
-            sa.Enum("disponivel", "reservado", "doado_trocado", name="status_anuncio"),
+            postgresql.ENUM(
+                "disponivel",
+                "reservado",
+                "doado_trocado",
+                name="status_anuncio",
+                create_type=False,
+            ),
             nullable=False,
         ),
         sa.Column(
@@ -223,7 +253,13 @@ def upgrade() -> None:
         sa.Column("descricao", sa.Text(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("pendente", "analisada", "resolvida", name="status_denuncia"),
+            postgresql.ENUM(
+                "pendente",
+                "analisada",
+                "resolvida",
+                name="status_denuncia",
+                create_type=False,
+            ),
             nullable=False,
             server_default="pendente",
         ),

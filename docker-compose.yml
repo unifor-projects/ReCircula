@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-doacao_troca}
+      POSTGRES_DB: ${POSTGRES_DB:-recircula_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:

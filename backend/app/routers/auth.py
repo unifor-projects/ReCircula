@@ -1,33 +1,104 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import secrets
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.usuario import Usuario
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, Token
+from app.schemas.usuario import (
+    EmailVerificationRequest,
+    RegisterResponse,
+    Token,
+    UsuarioCreate,
+    UsuarioResponse,
+)
 from app.core.security import hash_password, verify_password, create_access_token
+from app.services.email import send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
 
-@router.post("/registrar", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED, summary="Registrar novo usuário")
-def registrar(usuario: UsuarioCreate, db: Session = Depends(get_db)):
-    """Cria uma nova conta de usuário na plataforma."""
+@router.post(
+    "/registrar",
+    response_model=RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar novo usuário",
+)
+def registrar(
+    usuario: UsuarioCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Cria uma nova conta de usuário na plataforma e retorna um token JWT."""
     existente = db.query(Usuario).filter(Usuario.email == usuario.email).first()
     if existente:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="E-mail já cadastrado",
         )
+    token_verificacao = secrets.token_urlsafe(32)
     novo = Usuario(
         nome=usuario.nome,
         email=usuario.email,
         senha_hash=hash_password(usuario.senha),
+        token_verificacao=hash_password(token_verificacao),
     )
     db.add(novo)
     db.commit()
     db.refresh(novo)
-    return novo
+
+    background_tasks.add_task(
+        send_verification_email,
+        destinatario=novo.email,
+        nome=novo.nome,
+        token=token_verificacao,
+    )
+
+    access_token = create_access_token({"sub": str(novo.id)})
+    return RegisterResponse(
+        usuario=UsuarioResponse.model_validate(novo),
+        access_token=access_token,
+        token_type="bearer",
+    )
+
+
+@router.post("/verificar-email", summary="Verificar e-mail")
+def verificar_email(
+    payload: EmailVerificationRequest,
+    db: Session = Depends(get_db),
+):
+    """Marca o e-mail como verificado a partir de um token válido."""
+    usuarios_pendentes = (
+        db.query(Usuario)
+        .filter(
+            Usuario.email_verificado.is_(False),
+            Usuario.token_verificacao.is_not(None),
+        )
+        .all()
+    )
+
+    usuario_encontrado = None
+    for usuario in usuarios_pendentes:
+        try:
+            if verify_password(payload.token, usuario.token_verificacao):
+                usuario_encontrado = usuario
+                break
+        except ValueError:
+            # Ignora valores legados em formato não BCrypt.
+            continue
+
+    if not usuario_encontrado:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de verificação inválido",
+        )
+
+    usuario_encontrado.email_verificado = True
+    usuario_encontrado.token_verificacao = None
+    db.commit()
+
+    return {"detail": "E-mail verificado com sucesso"}
 
 
 @router.post("/token", response_model=Token, summary="Login – obter token JWT")
@@ -42,6 +113,11 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="E-mail ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not usuario.email_verificado:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="E-mail ainda não verificado",
         )
     if not usuario.is_active:
         raise HTTPException(
