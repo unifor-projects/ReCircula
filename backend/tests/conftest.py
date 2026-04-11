@@ -38,16 +38,29 @@ def create_tables():
 
 @pytest.fixture()
 def db_session(create_tables):
-    """Yield a SQLAlchemy session that is rolled back after each test."""
+    """Yield a SQLAlchemy session that is rolled back after each test.
+
+    An outer connection-level transaction is started before the test.  An
+    initial SAVEPOINT is opened immediately so that every ``session.commit()``
+    call inside application code only releases a SAVEPOINT (and never commits
+    the outer transaction).  The ``after_transaction_end`` event listener
+    re-opens the SAVEPOINT after each release so subsequent commits in the
+    same test also stay within the outer transaction.  At teardown the outer
+    transaction is rolled back, leaving the in-memory database clean.
+
+    This pattern is used instead of SQLAlchemy 2.0's
+    ``join_transaction_mode="create_savepoint"`` because that mode does not
+    reliably isolate tests when using an in-memory SQLite database with
+    ``StaticPool`` (the connection lifecycle prevents proper rollback).
+    """
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
 
-    # Use nested transactions (savepoints) to handle session.commit() calls
     nested = connection.begin_nested()
 
     @event.listens_for(session, "after_transaction_end")
-    def end_savepoint(session, transaction):
+    def reopen_savepoint(sess, trans):
         nonlocal nested
         if not nested.is_active:
             nested = connection.begin_nested()
