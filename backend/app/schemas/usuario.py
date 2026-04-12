@@ -2,6 +2,8 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
+from app.models.anuncio import StatusAnuncio, TipoAnuncio
+
 
 class UsuarioCreate(BaseModel):
     nome: str = Field(..., min_length=2, max_length=150, examples=["João Silva"])
@@ -42,6 +44,33 @@ class UsuarioResponse(BaseModel):
     atualizado_em: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UsuarioPerfilAnuncio(BaseModel):
+    id: int
+    titulo: str
+    tipo: TipoAnuncio
+    status: StatusAnuncio
+    criado_em: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UsuarioPerfilResponse(BaseModel):
+    id: int
+    nome: str
+    foto_url: Optional[str]
+    localizacao: Optional[str]
+    bio: Optional[str]
+    anuncios_publicados: list[UsuarioPerfilAnuncio]
+
+
+class UsuarioPerfilUpdateResponse(BaseModel):
+    id: int
+    nome: str
+    foto_url: Optional[str]
+    localizacao: Optional[str]
+    bio: Optional[str]
 
 
 class Token(BaseModel):

@@ -16,6 +16,7 @@ dependencies = [
     "bcrypt>=4.2.1",
     "python-jose[cryptography]>=3.4.0",
     "python-multipart>=0.0.22",
+    "pillow>=12.2.0",
 ]
 
 [dependency-groups]

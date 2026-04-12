@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routers import auth, usuarios, anuncios, categorias, mensagens, denuncias
@@ -32,6 +35,9 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+UPLOADS_DIR = Path(__file__).resolve().parents[1] / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,4 +59,3 @@ app.include_router(denuncias.router)
 def health_check():
     """Verifica se a API está online."""
     return {"status": "ok", "message": "Plataforma de Doação e Troca – API funcionando!"}
-

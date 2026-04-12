@@ -16,3 +16,4 @@ python-jose[cryptography]>=3.4.0
 
 # File uploads
 python-multipart>=0.0.22
+pillow>=12.2.0
