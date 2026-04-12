@@ -5,10 +5,18 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
 import { AxiosError } from 'axios';
 import Button from '@/components/Button';
+import { useAuth } from '@/contexts/AuthContext';
 import { authClient, EMAIL_PATTERN } from '@/services/authClient';
+import { User } from '@/types';
+
+interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+}
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,9 +45,13 @@ export default function LoginPage() {
       // OAuth2PasswordRequestForm exige o campo "username", mesmo quando a credencial é e-mail.
       payload.append('username', email.trim());
       payload.append('password', senha);
-      await authClient.post('/auth/login', payload, {
+      const { data } = await authClient.post<LoginResponse>('/auth/login', payload, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
+      const profileResponse = await authClient.get<User>('/usuarios/me', {
+        headers: { Authorization: `Bearer ${data.access_token}` },
+      });
+      login(data.access_token, data.refresh_token, profileResponse.data);
       router.push('/');
     } catch (error) {
       const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
