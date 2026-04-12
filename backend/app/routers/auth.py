@@ -76,7 +76,8 @@ def registrar(
     )
 
 
-@router.post("/verificar-email", summary="Verificar e-mail")
+@router.post("/verify-email", summary="Verify e-mail")
+@router.post("/verificar-email", summary="Verificar e-mail", include_in_schema=False)
 def verificar_email(
     payload: EmailVerificationRequest,
     db: Session = Depends(get_db),
