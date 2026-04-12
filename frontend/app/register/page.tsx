@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
-import axios from 'axios';
+import { AxiosError } from 'axios';
 import Button from '@/components/Button';
+import { authClient, EMAIL_PATTERN } from '@/services/authClient';
 
 const MIN_PASSWORD_LENGTH = 6;
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function RegisterPage() {
   const [nome, setNome] = useState('');
@@ -20,7 +20,7 @@ export default function RegisterPage() {
   const validationMessage = useMemo(() => {
     if (!nome.trim()) return 'Informe seu nome.';
     if (!email.trim()) return 'Informe seu e-mail.';
-    if (!/\S+@\S+\.\S+/.test(email)) return 'Informe um e-mail válido.';
+    if (!EMAIL_PATTERN.test(email)) return 'Informe um e-mail válido.';
     if (senha.length < MIN_PASSWORD_LENGTH) return `A senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
     if (senha !== confirmacaoSenha) return 'A confirmação de senha não confere.';
     return '';
@@ -39,14 +39,14 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      await axios.post(`${API_BASE_URL}/auth/registrar`, { nome: nome.trim(), email: email.trim(), senha });
+      await authClient.post('/auth/registrar', { nome: nome.trim(), email: email.trim(), senha });
       setSuccessMessage('Cadastro realizado com sucesso. Verifique seu e-mail para confirmar a conta.');
       setNome('');
       setEmail('');
       setSenha('');
       setConfirmacaoSenha('');
     } catch (error) {
-      const detail = axios.isAxiosError<{ detail?: string }>(error) ? error.response?.data?.detail : undefined;
+      const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
       setErrorMessage(detail ?? 'Não foi possível concluir o cadastro. Tente novamente.');
     } finally {
       setIsSubmitting(false);

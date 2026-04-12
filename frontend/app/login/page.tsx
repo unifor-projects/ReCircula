@@ -1,22 +1,22 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
-import axios from 'axios';
+import { AxiosError } from 'axios';
 import Button from '@/components/Button';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { authClient, EMAIL_PATTERN } from '@/services/authClient';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   const validationMessage = useMemo(() => {
     if (!email.trim()) return 'Informe seu e-mail.';
-    if (!/\S+@\S+\.\S+/.test(email)) return 'Informe um e-mail válido.';
+    if (!EMAIL_PATTERN.test(email)) return 'Informe um e-mail válido.';
     if (!senha) return 'Informe sua senha.';
     return '';
   }, [email, senha]);
@@ -24,7 +24,6 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage('');
-    setSuccessMessage('');
 
     if (validationMessage) {
       setErrorMessage(validationMessage);
@@ -35,22 +34,15 @@ export default function LoginPage() {
 
     try {
       const payload = new URLSearchParams();
+      // OAuth2PasswordRequestForm exige o campo "username", mesmo quando a credencial é e-mail.
       payload.append('username', email.trim());
       payload.append('password', senha);
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, payload, {
+      await authClient.post('/auth/login', payload, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
-      const accessToken = response.data?.access_token;
-      const refreshToken = response.data?.refresh_token;
-      if (typeof window !== 'undefined' && accessToken) {
-        localStorage.setItem('access_token', accessToken);
-      }
-      if (typeof window !== 'undefined' && refreshToken) {
-        localStorage.setItem('refresh_token', refreshToken);
-      }
-      setSuccessMessage('Login realizado com sucesso.');
+      router.push('/');
     } catch (error) {
-      const detail = axios.isAxiosError<{ detail?: string }>(error) ? error.response?.data?.detail : undefined;
+      const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
       setErrorMessage(detail ?? 'Não foi possível fazer login. Tente novamente.');
     } finally {
       setIsSubmitting(false);
@@ -101,8 +93,6 @@ export default function LoginPage() {
           </div>
 
           {errorMessage ? <p className='text-sm text-red-600'>{errorMessage}</p> : null}
-          {successMessage ? <p className='text-sm text-green-700'>{successMessage}</p> : null}
-
           <Button type='submit' className='w-full' isLoading={isSubmitting}>
             Entrar
           </Button>

@@ -2,10 +2,13 @@
 
 import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
-import axios from 'axios';
+import { AxiosError } from 'axios';
 import Button from '@/components/Button';
+import { authClient, EMAIL_PATTERN } from '@/services/authClient';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+interface ForgotPasswordResponse {
+  detail: string;
+}
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -15,7 +18,7 @@ export default function ForgotPasswordPage() {
 
   const validationMessage = useMemo(() => {
     if (!email.trim()) return 'Informe seu e-mail.';
-    if (!/\S+@\S+\.\S+/.test(email)) return 'Informe um e-mail válido.';
+    if (!EMAIL_PATTERN.test(email)) return 'Informe um e-mail válido.';
     return '';
   }, [email]);
 
@@ -32,11 +35,11 @@ export default function ForgotPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/forgot-password`, { email: email.trim() });
-      const detail = response.data?.detail as string | undefined;
+      const response = await authClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email: email.trim() });
+      const detail = response.data?.detail;
       setSuccessMessage(detail ?? 'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.');
     } catch (error) {
-      const detail = axios.isAxiosError<{ detail?: string }>(error) ? error.response?.data?.detail : undefined;
+      const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
       setErrorMessage(detail ?? 'Não foi possível processar sua solicitação.');
     } finally {
       setIsSubmitting(false);
