@@ -13,6 +13,9 @@
 /.next/
 /out/
 
+# backup manual do .next
+/.next-root-backup/
+
 # production
 /build
 

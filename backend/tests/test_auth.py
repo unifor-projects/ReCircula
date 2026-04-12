@@ -10,7 +10,7 @@ REGISTER_URL = "/auth/registrar"
 LOGIN_URL = "/auth/login"
 LOGOUT_URL = "/auth/logout"
 REFRESH_URL = "/auth/refresh"
-VERIFY_EMAIL_URL = "/auth/verificar-email"
+VERIFY_EMAIL_URL = "/auth/verify-email"
 FORGOT_PASSWORD_URL = "/auth/forgot-password"
 RESET_PASSWORD_URL = "/auth/reset-password"
 

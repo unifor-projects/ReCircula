@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def _build_verification_email(destinatario: str, nome: str, token: str) -> MIMEMultipart:
-    link = f"{settings.FRONTEND_URL}/verificar-email?token={token}"
+    link = f"{settings.FRONTEND_URL}/verify-email?token={token}"
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "Confirme seu e-mail – Plataforma de Doação e Troca"
