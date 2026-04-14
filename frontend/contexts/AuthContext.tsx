@@ -32,6 +32,7 @@ function getTokenExpirationMs(token: string): number | null {
   if (!payload) return null;
 
   try {
+    // JWT uses base64url encoding. Convert to standard base64 and pad to a multiple of 4.
     const base64Payload = payload.replace(/-/g, '+').replace(/_/g, '/');
     const normalizedPayload = base64Payload.padEnd(Math.ceil(base64Payload.length / 4) * 4, '=');
     const decodedPayload = JSON.parse(atob(normalizedPayload)) as { exp?: number };
@@ -126,10 +127,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const timeoutMs = Math.max(expiresAt - Date.now() - REFRESH_BUFFER_MS, 0);
+    const timeUntilRefreshMs = expiresAt - Date.now() - REFRESH_BUFFER_MS;
+    if (timeUntilRefreshMs <= 0) {
+      // Token is already expired or expiring within the buffer window — refresh immediately.
+      void refreshAccessToken();
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       void refreshAccessToken();
-    }, timeoutMs);
+    }, timeUntilRefreshMs);
     return () => window.clearTimeout(timeoutId);
   }, [clearAuthStorage, refreshAccessToken, refreshToken, router, token]);
 
