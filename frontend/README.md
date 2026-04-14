@@ -23,6 +23,8 @@ cp .env.example .env
 Variavel usada atualmente:
 
 - `NEXT_PUBLIC_API_URL` (URL publica da API consumida no navegador)
+- `JWT_SECRET_KEY` (mesma chave do backend para validar assinatura do JWT no middleware)
+- `NEXT_SERVER_SESSION_COOKIE_NAME` (nome do cookie HttpOnly de sessao; padrao `rc_session`)
 
 ## Executar em desenvolvimento
 

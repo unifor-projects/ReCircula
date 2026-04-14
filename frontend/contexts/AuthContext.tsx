@@ -24,7 +24,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user';
-const AUTH_COOKIE_KEY = 'rc_session';
 const REFRESH_BUFFER_MS = 60_000;
 
 function getTokenExpirationMs(token: string): number | null {
@@ -49,11 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
 
-  const setAuthCookie = useCallback(() => {
-    const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${AUTH_COOKIE_KEY}=1; path=/; SameSite=Lax${secureFlag}`;
-  }, []);
-
   const clearAuthStorage = useCallback(() => {
     setToken(null);
     setRefreshToken(null);
@@ -61,8 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
-    const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${AUTH_COOKIE_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secureFlag}`;
   }, []);
 
   const persistAuth = useCallback(
@@ -73,9 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
       sessionStorage.setItem(REFRESH_TOKEN_KEY, nextRefreshToken);
       sessionStorage.setItem(USER_KEY, JSON.stringify(nextUser));
-      setAuthCookie();
     },
-    [setAuthCookie]
+    []
   );
 
   useEffect(() => {
@@ -88,14 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(storedToken);
         setRefreshToken(storedRefreshToken);
         setUser(parsedUser);
-        setAuthCookie();
       } catch {
         clearAuthStorage();
       }
       return;
     }
     clearAuthStorage();
-  }, [clearAuthStorage, setAuthCookie]);
+  }, [clearAuthStorage]);
 
   const refreshAccessToken = useCallback(async () => {
     if (!refreshToken) {
@@ -110,12 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setToken(response.data.access_token);
       sessionStorage.setItem(ACCESS_TOKEN_KEY, response.data.access_token);
-      setAuthCookie();
     } catch {
       clearAuthStorage();
       router.replace('/login');
     }
-  }, [clearAuthStorage, refreshToken, router, setAuthCookie]);
+  }, [clearAuthStorage, refreshToken, router]);
 
   useEffect(() => {
     if (!token || !refreshToken) return;

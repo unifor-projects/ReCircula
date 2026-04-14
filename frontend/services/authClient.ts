@@ -5,4 +5,5 @@ export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export const authClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
 });
