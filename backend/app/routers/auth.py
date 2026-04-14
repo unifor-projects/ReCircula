@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -26,10 +26,32 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.config import settings
 from app.services.email import send_password_reset_email, send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 _PASSWORD_RESET_TOKEN_EXPIRE_HOURS = 1
+
+
+def _set_session_cookie(response: Response, access_token: str) -> None:
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE,
+        samesite=settings.SESSION_COOKIE_SAMESITE,
+        path=settings.SESSION_COOKIE_PATH,
+        domain=settings.session_cookie_domain,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        path=settings.SESSION_COOKIE_PATH,
+        domain=settings.session_cookie_domain,
+    )
 
 
 @router.post(
@@ -276,23 +298,45 @@ def reset_password(
 
 @router.post("/login", response_model=TokenPair, summary="Login com e-mail e senha")
 def login(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
     usuario = _authenticate_user(form_data.username, form_data.password, db)
-    return _build_token_pair(usuario)
+    token_pair = _build_token_pair(usuario)
+    _set_session_cookie(response, token_pair.access_token)
+    return token_pair
 
 
 @router.post("/refresh", response_model=Token, summary="Renovar access token")
-def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
-    usuario = _get_user_from_refresh_token(payload.refresh_token, db)
+def refresh(
+    payload: RefreshRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    try:
+        usuario = _get_user_from_refresh_token(payload.refresh_token, db)
+    except HTTPException:
+        _clear_session_cookie(response)
+        raise
+
     access_token = create_access_token({"sub": str(usuario.id)})
+    _set_session_cookie(response, access_token)
     return Token(access_token=access_token, token_type="bearer")
 
 
 @router.post("/logout", summary="Logout do usuário")
-def logout(payload: RefreshRequest, db: Session = Depends(get_db)):
-    usuario = _get_user_from_refresh_token(payload.refresh_token, db)
+def logout(
+    payload: RefreshRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    try:
+        usuario = _get_user_from_refresh_token(payload.refresh_token, db)
+    except HTTPException:
+        _clear_session_cookie(response)
+        raise
+
     try:
         usuario.refresh_token_version += 1
         db.commit()
@@ -302,4 +346,5 @@ def logout(payload: RefreshRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao finalizar logout",
         ) from exc
+    _clear_session_cookie(response)
     return {"detail": "Logout realizado com sucesso"}
