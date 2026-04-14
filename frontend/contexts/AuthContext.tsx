@@ -16,7 +16,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (accessToken: string, refreshToken: string, user: User) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setAuthCookie = useCallback(() => {
     const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${AUTH_COOKIE_KEY}=1; path=/; SameSite=Strict${secureFlag}`;
+    document.cookie = `${AUTH_COOKIE_KEY}=1; path=/; SameSite=Lax${secureFlag}`;
   }, []);
 
   const clearAuthStorage = useCallback(() => {
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
     const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${AUTH_COOKIE_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureFlag}`;
+    document.cookie = `${AUTH_COOKIE_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secureFlag}`;
   }, []);
 
   const persistAuth = useCallback(
