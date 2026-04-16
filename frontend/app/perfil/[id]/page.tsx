@@ -33,6 +33,7 @@ interface PerfilAtualizado {
 }
 
 const EMPTY_PREVIEW = '';
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const CEP_PATTERN = /^\d{5}-\d{3}$/;
 
 function getApiErrorMessage(error: unknown): string | undefined {
@@ -123,6 +124,7 @@ export default function PerfilPage() {
 
   function handleFotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
+    setErrorMessage('');
 
     if (previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl);
@@ -131,6 +133,14 @@ export default function PerfilPage() {
     if (!file) {
       setFotoFile(null);
       setPreviewUrl(EMPTY_PREVIEW);
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setFotoFile(null);
+      setPreviewUrl(EMPTY_PREVIEW);
+      setErrorMessage('A foto deve ter no máximo 5MB.');
+      event.target.value = '';
       return;
     }
 
