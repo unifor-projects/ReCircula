@@ -45,3 +45,6 @@ frontend/.next/
 frontend/out/
 frontend/*.tsbuildinfo
 frontend/.env*.local
+
+# Backend uploads
+backend/uploads/
