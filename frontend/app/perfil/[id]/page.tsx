@@ -55,7 +55,7 @@ function formatarData(dataISO: string): string {
   }).format(data);
 }
 
-function initials(nome: string): string {
+function getInitials(nome: string): string {
   const partes = nome.trim().split(/\s+/).filter(Boolean);
   if (!partes.length) return 'U';
   return partes
@@ -226,7 +226,7 @@ export default function PerfilPage() {
                 />
               ) : (
                 <div className='flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-xl font-semibold text-green-700'>
-                  {initials(perfil.nome)}
+                  {getInitials(perfil.nome)}
                 </div>
               )}
 
