@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 from uuid import uuid4
+import warnings
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.deps import get_current_user
+from app.models.anuncio import Anuncio, StatusAnuncio
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
     UsuarioPerfilAnuncio,
@@ -23,17 +25,21 @@ router = APIRouter(prefix="/usuarios", tags=["Usuários"])
 PROFILE_IMAGES_DIR = Path(__file__).resolve().parents[2] / "uploads" / "perfis"
 PROFILE_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 _ALLOWED_IMAGE_TYPES = {"image/jpeg": "JPEG", "image/png": "PNG"}
+_ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG"}
+_MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
+_MAX_PROFILE_IMAGE_PIXELS = 20_000_000
 
 
-def _serialize_usuario_perfil(usuario: Usuario) -> UsuarioPerfilResponse:
-    anuncios = sorted(usuario.anuncios, key=lambda anuncio: anuncio.criado_em, reverse=True)
+def _serialize_usuario_perfil(usuario: Usuario, anuncios_publicados: list[Anuncio]) -> UsuarioPerfilResponse:
     return UsuarioPerfilResponse(
         id=usuario.id,
         nome=usuario.nome,
         foto_url=usuario.foto_url,
         localizacao=usuario.localizacao,
         bio=usuario.descricao,
-        anuncios_publicados=[UsuarioPerfilAnuncio.model_validate(anuncio) for anuncio in anuncios],
+        anuncios_publicados=[
+            UsuarioPerfilAnuncio.model_validate(anuncio) for anuncio in anuncios_publicados
+        ],
     )
 
 
@@ -44,8 +50,13 @@ def _delete_profile_image(foto_url: str | None) -> None:
     expected_prefix = "/uploads/perfis/"
     if not path.startswith(expected_prefix):
         return
-    image_path = PROFILE_IMAGES_DIR / path.removeprefix(expected_prefix)
-    if image_path.exists():
+    base_dir = PROFILE_IMAGES_DIR.resolve()
+    image_path = (PROFILE_IMAGES_DIR / path.removeprefix(expected_prefix)).resolve()
+    try:
+        image_path.relative_to(base_dir)
+    except ValueError:
+        return
+    if image_path.is_file():
         image_path.unlink()
 
 
@@ -59,17 +70,39 @@ def _compress_and_save_profile_image(foto: UploadFile, request: Request) -> str:
     image_bytes = foto.file.read()
     if not image_bytes:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Arquivo de imagem vazio.")
+    if len(image_bytes) > _MAX_PROFILE_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="Arquivo de imagem excede o tamanho máximo permitido.",
+        )
 
     try:
-        image = Image.open(BytesIO(image_bytes))
-    except UnidentifiedImageError as exc:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            image = Image.open(BytesIO(image_bytes))
+            image.load()
+    except (UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Arquivo de imagem inválido.",
         ) from exc
 
+    image_format = (image.format or "").upper()
+    if image_format not in _ALLOWED_IMAGE_FORMATS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato de imagem inválido. Use JPG ou PNG.",
+        )
+
+    width, height = image.size
+    if width * height > _MAX_PROFILE_IMAGE_PIXELS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dimensões da imagem excedem o limite permitido.",
+        )
+
     image = ImageOps.exif_transpose(image)
-    ext = ".jpg" if foto.content_type == "image/jpeg" else ".png"
+    ext = ".jpg" if image_format == "JPEG" else ".png"
     output = BytesIO()
 
     if ext == ".jpg":
@@ -117,8 +150,10 @@ def atualizar_meu_perfil(
 ):
     """Atualiza dados de perfil do usuário autenticado (RF02.2)."""
     if foto is not None:
-        _delete_profile_image(current_user.foto_url)
-        current_user.foto_url = _compress_and_save_profile_image(foto, request)
+        foto_antiga = current_user.foto_url
+        nova_foto_url = _compress_and_save_profile_image(foto, request)
+        current_user.foto_url = nova_foto_url
+        _delete_profile_image(foto_antiga)
     if bio is not None:
         current_user.descricao = bio
     if localizacao is not None:
@@ -138,12 +173,17 @@ def atualizar_meu_perfil(
 @router.get("/{usuario_id}", response_model=UsuarioPerfilResponse, summary="Perfil público de usuário")
 def perfil_usuario(usuario_id: int, db: Session = Depends(get_db)):
     """Retorna o perfil público de um usuário com seus anúncios publicados."""
-    usuario = (
-        db.query(Usuario)
-        .options(selectinload(Usuario.anuncios))
-        .filter(Usuario.id == usuario_id)
-        .first()
-    )
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not usuario:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
-    return _serialize_usuario_perfil(usuario)
+    anuncios_publicados = (
+        db.query(Anuncio)
+        .options(selectinload(Anuncio.imagens))
+        .filter(
+            Anuncio.usuario_id == usuario_id,
+            Anuncio.status != StatusAnuncio.doado_trocado,
+        )
+        .order_by(Anuncio.criado_em.desc())
+        .all()
+    )
+    return _serialize_usuario_perfil(usuario, anuncios_publicados)
