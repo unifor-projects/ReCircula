@@ -33,6 +33,17 @@ interface PerfilAtualizado {
 }
 
 const EMPTY_PREVIEW = '';
+const CEP_PATTERN = /^\d{5}-\d{3}$/;
+
+function getApiErrorMessage(error: unknown): string | undefined {
+  return error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
+}
+
+function formatCepInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
 
 function formatarData(dataISO: string): string {
   const data = new Date(dataISO);
@@ -67,7 +78,7 @@ export default function PerfilPage() {
   const [successMessage, setSuccessMessage] = useState('');
 
   const [bio, setBio] = useState('');
-  const [cep, setCep] = useState('');
+  const [localizacao, setLocalizacao] = useState('');
   const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState(EMPTY_PREVIEW);
 
@@ -89,10 +100,9 @@ export default function PerfilPage() {
         const { data } = await api.get<PerfilPublico>(`/usuarios/${perfilId}`);
         setPerfil(data);
         setBio(data.bio ?? '');
-        setCep(data.localizacao ?? '');
+        setLocalizacao(formatCepInput(data.localizacao ?? ''));
       } catch (error) {
-        const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
-        setErrorMessage(detail ?? 'Não foi possível carregar o perfil.');
+        setErrorMessage(getApiErrorMessage(error) ?? 'Não foi possível carregar o perfil.');
       } finally {
         setLoading(false);
       }
@@ -137,12 +147,18 @@ export default function PerfilPage() {
     setSuccessMessage('');
 
     try {
+      const localizacaoNormalizada = formatCepInput(localizacao);
+      if (localizacaoNormalizada && !CEP_PATTERN.test(localizacaoNormalizada)) {
+        setErrorMessage('Informe um CEP válido no formato 00000-000.');
+        return;
+      }
+
       const formData = new FormData();
       if (fotoFile) {
         formData.append('foto', fotoFile);
       }
       formData.append('bio', bio);
-      formData.append('localizacao', cep.trim());
+      formData.append('localizacao', localizacaoNormalizada);
 
       const { data } = await api.patch<PerfilAtualizado>('/usuarios/me', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -167,8 +183,7 @@ export default function PerfilPage() {
       setIsEditing(false);
       setSuccessMessage('Perfil atualizado com sucesso.');
     } catch (error) {
-      const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
-      setErrorMessage(detail ?? 'Não foi possível salvar as alterações.');
+      setErrorMessage(getApiErrorMessage(error) ?? 'Não foi possível salvar as alterações.');
     } finally {
       setIsSaving(false);
     }
@@ -278,8 +293,8 @@ export default function PerfilPage() {
                   id='cep'
                   name='cep'
                   type='text'
-                  value={cep}
-                  onChange={(event) => setCep(event.target.value)}
+                  value={localizacao}
+                  onChange={(event) => setLocalizacao(formatCepInput(event.target.value))}
                   className='w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100'
                   placeholder='00000-000'
                   maxLength={9}
@@ -296,7 +311,7 @@ export default function PerfilPage() {
                   onClick={() => {
                     setIsEditing(false);
                     setBio(perfil.bio ?? '');
-                    setCep(perfil.localizacao ?? '');
+                    setLocalizacao(formatCepInput(perfil.localizacao ?? ''));
                     setFotoFile(null);
                     if (previewUrl.startsWith('blob:')) {
                       URL.revokeObjectURL(previewUrl);
