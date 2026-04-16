@@ -66,7 +66,7 @@ function initials(nome: string): string {
 
 export default function PerfilPage() {
   const params = useParams<{ id: string }>();
-  const perfilId = Number(params?.id ?? Number.NaN);
+  const perfilId = Number(params?.id ?? NaN);
   const { user } = useAuth();
 
   const [perfil, setPerfil] = useState<PerfilPublico | null>(null);
@@ -232,7 +232,7 @@ export default function PerfilPage() {
               <div>
                 <h1 className='text-2xl font-semibold text-gray-900'>{perfil.nome}</h1>
                 <p className='mt-1 text-sm text-gray-600'>
-                  Localização aproximada: {perfil.localizacao?.trim() || 'Não informada'}
+                  CEP / localização aproximada: {perfil.localizacao?.trim() || 'Não informado'}
                 </p>
               </div>
             </div>
