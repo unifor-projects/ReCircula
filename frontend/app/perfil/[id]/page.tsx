@@ -100,7 +100,7 @@ export default function PerfilPage() {
         const { data } = await api.get<PerfilPublico>(`/usuarios/${perfilId}`);
         setPerfil(data);
         setBio(data.bio ?? '');
-        setLocalizacao(formatCepInput(data.localizacao ?? ''));
+        setLocalizacao(data.localizacao ?? '');
       } catch (error) {
         setErrorMessage(getApiErrorMessage(error) ?? 'Não foi possível carregar o perfil.');
       } finally {
@@ -142,17 +142,17 @@ export default function PerfilPage() {
     event.preventDefault();
     if (!isOwner || !perfil) return;
 
+    const localizacaoNormalizada = formatCepInput(localizacao);
+    if (localizacaoNormalizada && !CEP_PATTERN.test(localizacaoNormalizada)) {
+      setErrorMessage('Informe um CEP válido no formato 00000-000.');
+      return;
+    }
+
     setIsSaving(true);
     setErrorMessage('');
     setSuccessMessage('');
 
     try {
-      const localizacaoNormalizada = formatCepInput(localizacao);
-      if (localizacaoNormalizada && !CEP_PATTERN.test(localizacaoNormalizada)) {
-        setErrorMessage('Informe um CEP válido no formato 00000-000.');
-        return;
-      }
-
       const formData = new FormData();
       if (fotoFile) {
         formData.append('foto', fotoFile);
@@ -311,7 +311,7 @@ export default function PerfilPage() {
                   onClick={() => {
                     setIsEditing(false);
                     setBio(perfil.bio ?? '');
-                    setLocalizacao(formatCepInput(perfil.localizacao ?? ''));
+                    setLocalizacao(perfil.localizacao ?? '');
                     setFotoFile(null);
                     if (previewUrl.startsWith('blob:')) {
                       URL.revokeObjectURL(previewUrl);
