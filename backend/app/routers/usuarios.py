@@ -3,10 +3,10 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 from uuid import uuid4
-import warnings
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from PIL import Image, ImageOps, UnidentifiedImageError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -25,9 +25,10 @@ router = APIRouter(prefix="/usuarios", tags=["Usuários"])
 PROFILE_IMAGES_DIR = Path(__file__).resolve().parents[2] / "uploads" / "perfis"
 PROFILE_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 _ALLOWED_IMAGE_TYPES = {"image/jpeg": "JPEG", "image/png": "PNG"}
-_ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG"}
+_ALLOWED_IMAGE_FORMATS = set(_ALLOWED_IMAGE_TYPES.values())
 _MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 _MAX_PROFILE_IMAGE_PIXELS = 20_000_000
+Image.MAX_IMAGE_PIXELS = _MAX_PROFILE_IMAGE_PIXELS
 
 
 def _serialize_usuario_perfil(usuario: Usuario, anuncios_publicados: list[Anuncio]) -> UsuarioPerfilResponse:
@@ -77,11 +78,9 @@ def _compress_and_save_profile_image(foto: UploadFile, request: Request) -> str:
         )
 
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            image = Image.open(BytesIO(image_bytes))
-            image.load()
-    except (UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        image = Image.open(BytesIO(image_bytes))
+        image.load()
+    except (UnidentifiedImageError, Image.DecompressionBombError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Arquivo de imagem inválido.",
@@ -149,17 +148,31 @@ def atualizar_meu_perfil(
     current_user: Usuario = Depends(get_current_user),
 ):
     """Atualiza dados de perfil do usuário autenticado (RF02.2)."""
+    foto_antiga: str | None = None
+    nova_foto_url: str | None = None
+
     if foto is not None:
         foto_antiga = current_user.foto_url
         nova_foto_url = _compress_and_save_profile_image(foto, request)
         current_user.foto_url = nova_foto_url
-        _delete_profile_image(foto_antiga)
     if bio is not None:
         current_user.descricao = bio
     if localizacao is not None:
         current_user.localizacao = localizacao
 
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        if nova_foto_url is not None:
+            _delete_profile_image(nova_foto_url)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Não foi possível atualizar o perfil.",
+        ) from exc
+
+    if foto_antiga is not None and nova_foto_url is not None:
+        _delete_profile_image(foto_antiga)
     db.refresh(current_user)
     return UsuarioPerfilUpdateResponse(
         id=current_user.id,

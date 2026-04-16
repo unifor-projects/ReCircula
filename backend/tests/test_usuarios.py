@@ -108,7 +108,7 @@ def test_patch_usuarios_me_rejeita_formato_invalido_de_foto(client):
     assert "JPG ou PNG" in resposta.json()["detail"]
 
 
-def test_patch_usuarios_me_atualiza_apenas_usuario_autenticado(client):
+def test_patch_usuarios_me_nao_permite_edicao_cruzada(client):
     usuario1_id, token1 = _registrar_verificar_e_logar(
         client, "Usuário Um", "um@example.com", "senha123"
     )
