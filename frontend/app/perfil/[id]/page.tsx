@@ -34,6 +34,8 @@ interface PerfilAtualizado {
 
 const EMPTY_PREVIEW = '';
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_SIZE_MB = MAX_IMAGE_SIZE_BYTES / (1024 * 1024);
+const CEP_FORMAT = '00000-000';
 const CEP_PATTERN = /^\d{5}-\d{3}$/;
 
 function getApiErrorMessage(error: unknown): string | undefined {
@@ -139,7 +141,7 @@ export default function PerfilPage() {
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
       setFotoFile(null);
       setPreviewUrl(EMPTY_PREVIEW);
-      setErrorMessage('A foto deve ter no máximo 5MB.');
+      setErrorMessage(`A foto deve ter no máximo ${MAX_IMAGE_SIZE_MB}MB.`);
       event.target.value = '';
       return;
     }
@@ -157,7 +159,7 @@ export default function PerfilPage() {
 
     const localizacaoNormalizada = formatCepInput(localizacao);
     if (localizacaoNormalizada && !CEP_PATTERN.test(localizacaoNormalizada)) {
-      setErrorMessage('Informe um CEP válido no formato 00000-000.');
+      setErrorMessage(`Informe um CEP válido no formato ${CEP_FORMAT}.`);
       return;
     }
 
@@ -307,7 +309,7 @@ export default function PerfilPage() {
                   value={localizacao}
                   onChange={(event) => setLocalizacao(formatCepInput(event.target.value))}
                   className='w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100'
-                  placeholder='00000-000'
+                  placeholder={CEP_FORMAT}
                   maxLength={9}
                 />
               </div>
