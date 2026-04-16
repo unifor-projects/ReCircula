@@ -142,6 +142,9 @@ export default function PerfilPage() {
     event.preventDefault();
     if (!isOwner || !perfil) return;
 
+    setErrorMessage('');
+    setSuccessMessage('');
+
     const localizacaoNormalizada = formatCepInput(localizacao);
     if (localizacaoNormalizada && !CEP_PATTERN.test(localizacaoNormalizada)) {
       setErrorMessage('Informe um CEP válido no formato 00000-000.');
@@ -149,8 +152,6 @@ export default function PerfilPage() {
     }
 
     setIsSaving(true);
-    setErrorMessage('');
-    setSuccessMessage('');
 
     try {
       const formData = new FormData();
@@ -232,7 +233,7 @@ export default function PerfilPage() {
               <div>
                 <h1 className='text-2xl font-semibold text-gray-900'>{perfil.nome}</h1>
                 <p className='mt-1 text-sm text-gray-600'>
-                  CEP / localização aproximada: {perfil.localizacao?.trim() || 'Não informado'}
+                  Localização (CEP): {perfil.localizacao?.trim() || 'Não informada'}
                 </p>
               </div>
             </div>
