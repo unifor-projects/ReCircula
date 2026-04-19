@@ -3,7 +3,7 @@ import type { JWTPayload } from 'jose';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/perfil'];
+const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/perfil', '/anuncios'];
 const SESSION_COOKIE_NAME = process.env.NEXT_SERVER_SESSION_COOKIE_NAME ?? 'rc_session';
 const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY;
 

@@ -1,19 +1,16 @@
 export interface User {
   id: number;
-  name: string;
+  nome: string;
   email: string;
-  created_at: string;
-}
-
-export interface Announcement {
-  id: number;
-  title: string;
-  description: string;
-  category: string;
-  status: 'available' | 'reserved' | 'donated';
-  user_id: number;
-  created_at: string;
-  images: string[];
+  foto_url: string | null;
+  descricao: string | null;
+  localizacao: string | null;
+  cep: string | null;
+  is_active: boolean;
+  is_admin: boolean;
+  email_verificado: boolean;
+  criado_em: string;
+  atualizado_em: string;
 }
 
 export interface ApiError {

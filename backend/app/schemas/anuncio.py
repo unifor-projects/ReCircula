@@ -28,6 +28,7 @@ class AnuncioCreate(BaseModel):
 
 class AnuncioUpdate(BaseModel):
     titulo: Optional[str] = Field(None, min_length=3, max_length=200)
+    tipo: Optional[TipoAnuncio] = None
     descricao: Optional[str] = Field(None, min_length=10)
     condicao: Optional[CondicaoItem] = None
     categoria_id: Optional[int] = None

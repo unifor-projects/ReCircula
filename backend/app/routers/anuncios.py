@@ -6,7 +6,7 @@ from typing import List, Optional
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.usuario import Usuario
-from app.models.anuncio import Anuncio, AnuncioImagem, StatusHistorico, StatusAnuncio
+from app.models.anuncio import Anuncio, AnuncioImagem, StatusHistorico, StatusAnuncio, TipoAnuncio
 from app.schemas.anuncio import (
     AnuncioCreate,
     AnuncioUpdate,
@@ -70,7 +70,11 @@ def listar_anuncios(
         )
     if categoria_id:
         query = query.filter(Anuncio.categoria_id == categoria_id)
-    if tipo:
+    if tipo and tipo in (TipoAnuncio.doacao, TipoAnuncio.troca):
+        query = query.filter(
+            or_(Anuncio.tipo == tipo, Anuncio.tipo == TipoAnuncio.ambos)
+        )
+    elif tipo:
         query = query.filter(Anuncio.tipo == tipo)
     if cep:
         query = query.filter(Anuncio.cep.ilike(f"{cep[:5]}%"))
@@ -129,7 +133,7 @@ def atualizar_anuncio(
     if anuncio.usuario_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
 
-    for field in ("titulo", "descricao", "condicao", "categoria_id", "localizacao", "cep"):
+    for field in ("titulo", "tipo", "descricao", "condicao", "categoria_id", "localizacao", "cep"):
         value = getattr(dados, field)
         if value is not None:
             setattr(anuncio, field, value)

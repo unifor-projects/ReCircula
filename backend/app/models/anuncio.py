@@ -13,6 +13,7 @@ def _utcnow() -> datetime:
 class TipoAnuncio(str, PyEnum):
     doacao = "doacao"
     troca = "troca"
+    ambos = "ambos"
 
 
 class CondicaoItem(str, PyEnum):

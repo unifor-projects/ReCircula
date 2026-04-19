@@ -52,7 +52,7 @@ export default function LoginPage() {
         headers: { Authorization: `Bearer ${data.access_token}` },
       });
       login(data.access_token, data.refresh_token, profileResponse.data);
-      router.push('/');
+      router.push('/anuncios');
     } catch (error) {
       const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
       setErrorMessage(detail ?? 'Não foi possível fazer login. Tente novamente.');
