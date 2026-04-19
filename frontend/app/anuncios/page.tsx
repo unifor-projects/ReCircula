@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Button from '@/components/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
+import { PlusIcon } from 'lucide-react';
 
 interface AnuncioImagem {
   id: number;
@@ -45,7 +46,11 @@ interface Categoria {
 function formatarData(dataISO: string): string {
   const data = new Date(dataISO);
   if (Number.isNaN(data.getTime())) return dataISO;
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(data);
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(data);
 }
 
 function formatCepInput(value: string): string {
@@ -54,7 +59,11 @@ function formatCepInput(value: string): string {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
-const TIPO_LABEL: Record<string, string> = { doacao: 'Doação', troca: 'Troca', ambos: 'Doação e Troca' };
+const TIPO_LABEL: Record<string, string> = {
+  doacao: 'Doação',
+  troca: 'Troca',
+  ambos: 'Doação e Troca',
+};
 const TIPO_COLOR: Record<string, string> = {
   doacao: 'bg-green-100 text-green-700',
   troca: 'bg-blue-100 text-blue-700',
@@ -81,7 +90,12 @@ function AnuncioCard({ anuncio }: { anuncio: Anuncio }) {
           <img src={primeiraImagem} alt={anuncio.titulo} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              className="h-12 w-12 text-gray-300"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -92,7 +106,7 @@ function AnuncioCard({ anuncio }: { anuncio: Anuncio }) {
           </div>
         )}
         <span
-          className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-xs font-medium ${TIPO_COLOR[anuncio.tipo] ?? 'bg-gray-100 text-gray-600'}`}
+          className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-xs font-bold ${TIPO_COLOR[anuncio.tipo] ?? 'bg-gray-100 text-gray-600'}`}
         >
           {TIPO_LABEL[anuncio.tipo] ?? anuncio.tipo}
         </span>
@@ -188,7 +202,9 @@ export default function AnunciosPage() {
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Anúncios</h1>
-            <p className="mt-1 text-sm text-gray-500">Encontre itens para doação ou troca perto de você.</p>
+            <p className="mt-1 text-sm text-gray-500">
+              Encontre itens para doação ou troca perto de você.
+            </p>
           </div>
 
           <div className="flex gap-2">
@@ -201,7 +217,9 @@ export default function AnunciosPage() {
             )}
             {isAuthenticated ? (
               <Link href="/anuncios/novo">
-                <Button type="button">+ Criar Anúncio</Button>
+                <Button type="button">
+                  <PlusIcon className="mr-2 h-5 w-5" /> Criar Anúncio
+                </Button>
               </Link>
             ) : (
               <Link href="/login">
@@ -211,8 +229,11 @@ export default function AnunciosPage() {
           </div>
         </header>
 
-        <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <section className="rounded-2xl border border-green-300 bg-white p-4 shadow-sm">
+          <form
+            onSubmit={handleSearch}
+            className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+          >
             <div className="min-w-[180px] flex-1">
               <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor="q">
                 Busca
@@ -300,7 +321,7 @@ export default function AnunciosPage() {
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
               <span className="text-xs text-gray-400">Tipo selecionado:</span>
               {filtroDoacao && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700">
                   Doação
                   <button
                     type="button"
@@ -313,7 +334,7 @@ export default function AnunciosPage() {
                 </span>
               )}
               {filtroTroca && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
                   Troca
                   <button
                     type="button"
@@ -353,8 +374,18 @@ export default function AnunciosPage() {
                 aria-label="Rolar para a esquerda"
                 className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white p-2 shadow-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
               >
-                <svg className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                <svg
+                  className="h-5 w-5 text-gray-700"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
                 </svg>
               </button>
 
@@ -364,7 +395,11 @@ export default function AnunciosPage() {
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {anuncios.map((anuncio) => (
-                  <Link key={anuncio.id} href={`/anuncios/${anuncio.id}`} className="focus:outline-none">
+                  <Link
+                    key={anuncio.id}
+                    href={`/anuncios/${anuncio.id}`}
+                    className="focus:outline-none"
+                  >
                     <AnuncioCard anuncio={anuncio} />
                   </Link>
                 ))}
@@ -376,8 +411,18 @@ export default function AnunciosPage() {
                 aria-label="Rolar para a direita"
                 className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white p-2 shadow-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
               >
-                <svg className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <svg
+                  className="h-5 w-5 text-gray-700"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
                 </svg>
               </button>
             </div>
@@ -385,7 +430,9 @@ export default function AnunciosPage() {
         </section>
 
         {!loading && anuncios.length > 0 && (
-          <p className="text-center text-xs text-gray-400">{anuncios.length} anúncio(s) encontrado(s)</p>
+          <p className="text-center text-xs text-gray-400">
+            {anuncios.length} anúncio(s) encontrado(s)
+          </p>
         )}
       </div>
     </main>

@@ -32,7 +32,8 @@ function formatCepInput(value: string): string {
 
 function getApiError(error: unknown): string {
   return error instanceof AxiosError
-    ? ((error.response?.data as { detail?: string } | undefined)?.detail ?? 'Erro ao processar a requisição.')
+    ? ((error.response?.data as { detail?: string } | undefined)?.detail ??
+        'Erro ao processar a requisição.')
     : 'Erro ao processar a requisição.';
 }
 
@@ -125,7 +126,9 @@ export default function NovoAnuncioPage() {
             <span className="text-gray-900">Novo</span>
           </nav>
           <h1 className="text-2xl font-bold text-gray-900">Novo Anúncio</h1>
-          <p className="mt-1 text-sm text-gray-500">Preencha as informações do item que deseja doar ou trocar.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Preencha as informações do item que deseja doar ou trocar.
+          </p>
         </header>
 
         <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -195,7 +198,7 @@ export default function NovoAnuncioPage() {
               </div>
 
               <div>
-                <label className={labelClass} htmlFor="condicao">
+                <label className={`${labelClass} mb-2`} htmlFor="condicao">
                   Condição <span className="text-red-500">*</span>
                 </label>
                 <select
