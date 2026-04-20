@@ -3,7 +3,7 @@
 import { AxiosError } from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import Button from '@/components/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
@@ -24,6 +24,9 @@ const CONDICAO_OPTIONS = [
   { value: 'para_reparo', label: 'Para reparo' },
 ];
 
+const MAX_IMAGES = 3;
+const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif';
+
 function formatCepInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
   if (digits.length <= 5) return digits;
@@ -31,15 +34,21 @@ function formatCepInput(value: string): string {
 }
 
 function getApiError(error: unknown): string {
-  return error instanceof AxiosError
-    ? ((error.response?.data as { detail?: string } | undefined)?.detail ??
-        'Erro ao processar a requisição.')
-    : 'Erro ao processar a requisição.';
+  if (error instanceof AxiosError) {
+    const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((e: Record<string, unknown>) => String(e.msg ?? e)).join('; ');
+    }
+    return 'Erro ao processar a requisição.';
+  }
+  return 'Erro ao processar a requisição.';
 }
 
 export default function NovoAnuncioPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [titulo, setTitulo] = useState('');
@@ -50,7 +59,8 @@ export default function NovoAnuncioPage() {
   const [categoriaId, setCategoriaId] = useState('');
   const [localizacao, setLocalizacao] = useState('');
   const [cep, setCep] = useState('');
-  const [imagens, setImagens] = useState<string[]>(['']);
+  const [imagens, setImagens] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -65,15 +75,20 @@ export default function NovoAnuncioPage() {
       .catch(() => {});
   }, [isAuthenticated, router]);
 
-  function addImageField() {
-    setImagens((prev) => [...prev, '']);
+  useEffect(() => {
+    const urls = imagens.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [imagens]);
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    const combined = [...imagens, ...selected].slice(0, MAX_IMAGES);
+    setImagens(combined);
+    e.target.value = '';
   }
 
-  function updateImageUrl(index: number, value: string) {
-    setImagens((prev) => prev.map((url, i) => (i === index ? value : url)));
-  }
-
-  function removeImageField(index: number) {
+  function removeImage(index: number) {
     setImagens((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -88,17 +103,20 @@ export default function NovoAnuncioPage() {
 
     const tipo = tipoDoacao && tipoTroca ? 'ambos' : tipoDoacao ? 'doacao' : 'troca';
 
+    const fd = new FormData();
+    fd.append('titulo', titulo.trim());
+    fd.append('descricao', descricao.trim());
+    fd.append('tipo', tipo);
+    fd.append('condicao', condicao);
+    if (categoriaId) fd.append('categoria_id', categoriaId);
+    if (localizacao.trim()) fd.append('localizacao', localizacao.trim());
+    if (cep.trim()) fd.append('cep', cep.trim());
+    imagens.forEach((file) => fd.append('imagens', file));
+
     setIsSubmitting(true);
     try {
-      const { data } = await api.post<AnuncioResponse>('/anuncios/', {
-        titulo: titulo.trim(),
-        descricao: descricao.trim(),
-        tipo,
-        condicao,
-        categoria_id: categoriaId ? Number(categoriaId) : undefined,
-        localizacao: localizacao.trim() || undefined,
-        cep: cep.trim() || undefined,
-        imagens: imagens.map((u) => u.trim()).filter(Boolean),
+      const { data } = await api.post<AnuncioResponse>('/anuncios/', fd, {
+        headers: { 'Content-Type': undefined },
       });
       router.push(`/anuncios/${data.id}`);
     } catch (error) {
@@ -268,37 +286,54 @@ export default function NovoAnuncioPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Imagens (URLs)</label>
-              <div className="space-y-2">
-                {imagens.map((url, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="url"
-                      value={url}
-                      onChange={(e) => updateImageUrl(index, e.target.value)}
-                      placeholder="https://exemplo.com/imagem.jpg"
-                      className={inputClass}
-                    />
-                    {imagens.length > 1 && (
+              <label className={labelClass}>
+                Imagens <span className="text-gray-400 font-normal">(até {MAX_IMAGES} — JPEG, PNG ou GIF)</span>
+              </label>
+
+              {previews.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-3">
+                  {previews.map((src, i) => (
+                    <div key={i} className="relative">
+                      <img
+                        src={src}
+                        alt={`Prévia ${i + 1}`}
+                        className="h-24 w-24 rounded-lg border border-gray-200 object-cover"
+                      />
                       <button
                         type="button"
-                        onClick={() => removeImageField(index)}
+                        onClick={() => removeImage(i)}
                         aria-label="Remover imagem"
-                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 transition hover:border-red-300 hover:text-red-500"
+                        className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white shadow hover:bg-red-600"
                       >
                         ✕
                       </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {imagens.length < MAX_IMAGES && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_TYPES}
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 transition hover:border-green-400 hover:text-green-600"
+                  >
+                    + Adicionar imagem
+                    {imagens.length > 0 && (
+                      <span className="text-gray-400">({imagens.length}/{MAX_IMAGES})</span>
                     )}
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addImageField}
-                className="mt-2 text-sm font-medium text-green-600 hover:text-green-700"
-              >
-                + Adicionar imagem
-              </button>
+                  </button>
+                </>
+              )}
             </div>
 
             {errorMessage && (

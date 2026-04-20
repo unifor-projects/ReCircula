@@ -4,7 +4,12 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Button from '@/components/Button';
 import { useAuth } from '@/contexts/AuthContext';
-import api from '@/services/api';
+import api, { API_BASE_URL } from '@/services/api';
+
+function getImageUrl(url: string): string {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+}
 import { PlusIcon } from 'lucide-react';
 
 interface AnuncioImagem {
@@ -81,7 +86,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 function AnuncioCard({ anuncio }: { anuncio: Anuncio }) {
-  const primeiraImagem = anuncio.imagens[0]?.url ?? null;
+  const primeiraImagem = anuncio.imagens[0]?.url ? getImageUrl(anuncio.imagens[0].url) : null;
 
   return (
     <article className="min-w-[272px] max-w-[272px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">

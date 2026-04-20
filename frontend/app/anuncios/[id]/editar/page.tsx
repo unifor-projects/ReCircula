@@ -3,14 +3,26 @@
 import { AxiosError } from 'axios';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import Button from '@/components/Button';
 import { useAuth } from '@/contexts/AuthContext';
-import api from '@/services/api';
+import api, { API_BASE_URL } from '@/services/api';
+
+function getImageUrl(url: string): string {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+}
 
 interface Categoria {
   id: number;
   nome: string;
+}
+
+interface ImagemExistente {
+  id: number;
+  url: string;
+  content_type: string;
+  ordem: number;
 }
 
 interface AnuncioCarregado {
@@ -24,7 +36,7 @@ interface AnuncioCarregado {
   cep: string | null;
   usuario_id: number;
   categoria_id: number | null;
-  imagens: { id: number; url: string; ordem: number }[];
+  imagens: ImagemExistente[];
 }
 
 const CONDICAO_OPTIONS = [
@@ -34,6 +46,9 @@ const CONDICAO_OPTIONS = [
   { value: 'para_reparo', label: 'Para reparo' },
 ];
 
+const MAX_IMAGES = 3;
+const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif';
+
 function formatCepInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
   if (digits.length <= 5) return digits;
@@ -41,10 +56,15 @@ function formatCepInput(value: string): string {
 }
 
 function getApiError(error: unknown): string {
-  return error instanceof AxiosError
-    ? ((error.response?.data as { detail?: string } | undefined)?.detail ??
-        'Erro ao processar a requisição.')
-    : 'Erro ao processar a requisição.';
+  if (error instanceof AxiosError) {
+    const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((e: Record<string, unknown>) => String(e.msg ?? e)).join('; ');
+    }
+    return 'Erro ao processar a requisição.';
+  }
+  return 'Erro ao processar a requisição.';
 }
 
 export default function EditarAnuncioPage() {
@@ -52,6 +72,7 @@ export default function EditarAnuncioPage() {
   const anuncioId = Number(params?.id ?? NaN);
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [anuncioOriginal, setAnuncioOriginal] = useState<AnuncioCarregado | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -64,7 +85,10 @@ export default function EditarAnuncioPage() {
   const [categoriaId, setCategoriaId] = useState('');
   const [localizacao, setLocalizacao] = useState('');
   const [cep, setCep] = useState('');
-  const [imagens, setImagens] = useState<string[]>(['']);
+
+  const [imagensExistentes, setImagensExistentes] = useState<ImagemExistente[]>([]);
+  const [novasImagens, setNovasImagens] = useState<File[]>([]);
+  const [novasPreviews, setNovasPreviews] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -102,7 +126,7 @@ export default function EditarAnuncioPage() {
         setCategoriaId(a.categoria_id ? String(a.categoria_id) : '');
         setLocalizacao(a.localizacao ?? '');
         setCep(a.cep ?? '');
-        setImagens(a.imagens.length > 0 ? a.imagens.map((i) => i.url) : ['']);
+        setImagensExistentes(a.imagens);
         setCategorias(catRes.data);
       } catch {
         setErrorMessage('Não foi possível carregar o anúncio.');
@@ -114,16 +138,21 @@ export default function EditarAnuncioPage() {
     void carregar();
   }, [anuncioId, isAuthenticated, router, user?.id]);
 
-  function addImageField() {
-    setImagens((prev) => [...prev, '']);
+  useEffect(() => {
+    const urls = novasImagens.map((f) => URL.createObjectURL(f));
+    setNovasPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [novasImagens]);
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    const combined = [...novasImagens, ...selected].slice(0, MAX_IMAGES);
+    setNovasImagens(combined);
+    e.target.value = '';
   }
 
-  function updateImageUrl(index: number, value: string) {
-    setImagens((prev) => prev.map((u, i) => (i === index ? value : u)));
-  }
-
-  function removeImageField(index: number) {
-    setImagens((prev) => prev.filter((_, i) => i !== index));
+  function removeNovaImagem(index: number) {
+    setNovasImagens((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -137,17 +166,20 @@ export default function EditarAnuncioPage() {
 
     const tipo = tipoDoacao && tipoTroca ? 'ambos' : tipoDoacao ? 'doacao' : 'troca';
 
+    const fd = new FormData();
+    fd.append('titulo', titulo.trim());
+    fd.append('descricao', descricao.trim());
+    fd.append('tipo', tipo);
+    fd.append('condicao', condicao);
+    if (categoriaId) fd.append('categoria_id', categoriaId);
+    if (localizacao.trim()) fd.append('localizacao', localizacao.trim());
+    if (cep.trim()) fd.append('cep', cep.trim());
+    novasImagens.forEach((file) => fd.append('imagens', file));
+
     setIsSubmitting(true);
     try {
-      await api.put(`/anuncios/${anuncioId}`, {
-        titulo: titulo.trim(),
-        descricao: descricao.trim(),
-        tipo,
-        condicao,
-        categoria_id: categoriaId ? Number(categoriaId) : undefined,
-        localizacao: localizacao.trim() || undefined,
-        cep: cep.trim() || undefined,
-        imagens: imagens.map((u) => u.trim()).filter(Boolean),
+      await api.put(`/anuncios/${anuncioId}`, fd, {
+        headers: { 'Content-Type': undefined },
       });
       router.push(`/anuncios/${anuncioId}`);
     } catch (error) {
@@ -335,37 +367,77 @@ export default function EditarAnuncioPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Imagens (URLs)</label>
-              <div className="space-y-2">
-                {imagens.map((url, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="url"
-                      value={url}
-                      onChange={(e) => updateImageUrl(index, e.target.value)}
-                      placeholder="https://exemplo.com/imagem.jpg"
-                      className={inputClass}
-                    />
-                    {imagens.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeImageField(index)}
-                        aria-label="Remover imagem"
-                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 transition hover:border-red-300 hover:text-red-500"
-                      >
-                        ✕
-                      </button>
-                    )}
+              <label className={labelClass}>
+                Imagens{' '}
+                <span className="text-gray-400 font-normal">(até {MAX_IMAGES} — JPEG, PNG ou GIF)</span>
+              </label>
+
+              {novasImagens.length === 0 && imagensExistentes.length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-2 text-xs text-gray-500">Imagens atuais:</p>
+                  <div className="flex flex-wrap gap-3">
+                    {imagensExistentes.map((img) => (
+                      <img
+                        key={img.id}
+                        src={getImageUrl(img.url)}
+                        alt="Imagem atual"
+                        className="h-24 w-24 rounded-lg border border-gray-200 object-cover"
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addImageField}
-                className="mt-2 text-sm font-medium text-green-600 hover:text-green-700"
-              >
-                + Adicionar imagem
-              </button>
+                  <p className="mt-2 text-xs text-gray-400">
+                    Para substituir, selecione novas imagens abaixo.
+                  </p>
+                </div>
+              )}
+
+              {novasImagens.length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-2 text-xs text-gray-500">Novas imagens (substituirão as atuais):</p>
+                  <div className="flex flex-wrap gap-3">
+                    {novasPreviews.map((src, i) => (
+                      <div key={i} className="relative">
+                        <img
+                          src={src}
+                          alt={`Nova imagem ${i + 1}`}
+                          className="h-24 w-24 rounded-lg border border-green-200 object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeNovaImagem(i)}
+                          aria-label="Remover imagem"
+                          className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white shadow hover:bg-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {novasImagens.length < MAX_IMAGES && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_TYPES}
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 transition hover:border-green-400 hover:text-green-600"
+                  >
+                    + {novasImagens.length === 0 ? 'Substituir imagens' : 'Adicionar imagem'}
+                    {novasImagens.length > 0 && (
+                      <span className="text-gray-400">({novasImagens.length}/{MAX_IMAGES})</span>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
 
             {errorMessage && (

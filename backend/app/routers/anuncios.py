@@ -1,22 +1,31 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pathlib import Path
+from typing import List, Optional
+from urllib.parse import urlparse
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
-from typing import List, Optional
 
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.usuario import Usuario
-from app.models.anuncio import Anuncio, AnuncioImagem, StatusHistorico, StatusAnuncio, TipoAnuncio
+from app.models.anuncio import Anuncio, AnuncioImagem, StatusHistorico, StatusAnuncio, TipoAnuncio, CondicaoItem
 from app.schemas.anuncio import (
-    AnuncioCreate,
-    AnuncioUpdate,
-    AnuncioStatusUpdate,
     AnuncioResponse,
     AnuncioListResponse,
+    AnuncioStatusUpdate,
     StatusHistoricoResponse,
 )
 
 router = APIRouter(prefix="/anuncios", tags=["Anúncios"])
+
+ANUNCIO_IMAGES_DIR = Path(__file__).resolve().parents[2] / "uploads" / "anuncios"
+ANUNCIO_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif"}
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+_MAX_IMAGES = 3
 
 _load_options = [
     selectinload(Anuncio.imagens),
@@ -37,6 +46,45 @@ def _get_anuncio_or_404(anuncio_id: int, db: Session) -> Anuncio:
     return anuncio
 
 
+def _save_image(file: UploadFile) -> tuple[str, str]:
+    """Valida, salva e retorna (url_relativa, content_type)."""
+    if file.content_type not in _ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Formato não suportado: '{file.content_type}'. Use JPEG, PNG ou GIF.",
+        )
+    data = file.file.read()
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Arquivo de imagem vazio.",
+        )
+    if len(data) > _MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Arquivo excede o limite de 10 MB.",
+        )
+    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif"}
+    filename = f"{uuid4().hex}{ext_map[file.content_type]}"
+    (ANUNCIO_IMAGES_DIR / filename).write_bytes(data)
+    return f"/uploads/anuncios/{filename}", file.content_type
+
+
+def _delete_image_files(imagens: list[AnuncioImagem]) -> None:
+    for img in imagens:
+        path = urlparse(img.url).path
+        prefix = "/uploads/anuncios/"
+        if not path.startswith(prefix):
+            continue
+        file_path = (ANUNCIO_IMAGES_DIR / path.removeprefix(prefix)).resolve()
+        try:
+            file_path.relative_to(ANUNCIO_IMAGES_DIR.resolve())
+        except ValueError:
+            continue
+        if file_path.is_file():
+            file_path.unlink()
+
+
 @router.get("/", response_model=List[AnuncioListResponse], summary="Buscar e listar anúncios")
 def listar_anuncios(
     q: Optional[str] = Query(None, description="Busca por título ou descrição"),
@@ -55,7 +103,6 @@ def listar_anuncios(
     """
     query = db.query(Anuncio).options(*_load_options)
 
-    # RF06.2 – hide concluded ads by default unless explicitly requested
     if status:
         query = query.filter(Anuncio.status == status)
     else:
@@ -94,27 +141,42 @@ def buscar_anuncio(anuncio_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=AnuncioResponse, status_code=status.HTTP_201_CREATED, summary="Criar anúncio")
-def criar_anuncio(
-    dados: AnuncioCreate,
+async def criar_anuncio(
+    titulo: str = Form(..., min_length=3, max_length=200),
+    descricao: str = Form(..., min_length=10),
+    tipo: TipoAnuncio = Form(...),
+    condicao: CondicaoItem = Form(...),
+    categoria_id: Optional[int] = Form(None),
+    localizacao: Optional[str] = Form(None, max_length=255),
+    cep: Optional[str] = Form(None, max_length=9),
+    imagens: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Cria um novo anúncio de doação ou troca (RF03)."""
+    """Cria um novo anúncio de doação ou troca (RF03). Aceita até 3 imagens (JPEG, PNG, GIF)."""
+    valid_files = [f for f in imagens if f.filename]
+    if len(valid_files) > _MAX_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Máximo de {_MAX_IMAGES} imagens por anúncio.",
+        )
+
     anuncio = Anuncio(
-        titulo=dados.titulo,
-        descricao=dados.descricao,
-        tipo=dados.tipo,
-        condicao=dados.condicao,
-        categoria_id=dados.categoria_id,
-        localizacao=dados.localizacao,
-        cep=dados.cep,
+        titulo=titulo,
+        descricao=descricao,
+        tipo=tipo,
+        condicao=condicao,
+        categoria_id=categoria_id,
+        localizacao=localizacao,
+        cep=cep,
         usuario_id=current_user.id,
     )
     db.add(anuncio)
     db.flush()
 
-    for i, url in enumerate(dados.imagens):
-        db.add(AnuncioImagem(anuncio_id=anuncio.id, url=url, ordem=i))
+    for i, file in enumerate(valid_files):
+        url, content_type = _save_image(file)
+        db.add(AnuncioImagem(anuncio_id=anuncio.id, url=url, content_type=content_type, ordem=i))
 
     db.add(StatusHistorico(anuncio_id=anuncio.id, status_novo=StatusAnuncio.disponivel))
     db.commit()
@@ -122,26 +184,52 @@ def criar_anuncio(
 
 
 @router.put("/{anuncio_id}", response_model=AnuncioResponse, summary="Editar anúncio")
-def atualizar_anuncio(
+async def atualizar_anuncio(
     anuncio_id: int,
-    dados: AnuncioUpdate,
+    titulo: Optional[str] = Form(None, min_length=3, max_length=200),
+    descricao: Optional[str] = Form(None, min_length=10),
+    tipo: Optional[TipoAnuncio] = Form(None),
+    condicao: Optional[CondicaoItem] = Form(None),
+    categoria_id: Optional[int] = Form(None),
+    localizacao: Optional[str] = Form(None, max_length=255),
+    cep: Optional[str] = Form(None, max_length=9),
+    imagens: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Edita um anúncio existente. Apenas o dono pode editar (RF03.4)."""
+    """Edita um anúncio existente. Apenas o dono pode editar (RF03.4).
+    Se novas imagens forem enviadas, substituem todas as anteriores."""
     anuncio = _get_anuncio_or_404(anuncio_id, db)
     if anuncio.usuario_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
 
-    for field in ("titulo", "tipo", "descricao", "condicao", "categoria_id", "localizacao", "cep"):
-        value = getattr(dados, field)
+    fields = {
+        "titulo": titulo,
+        "tipo": tipo,
+        "descricao": descricao,
+        "condicao": condicao,
+        "categoria_id": categoria_id,
+        "localizacao": localizacao,
+        "cep": cep,
+    }
+    for field, value in fields.items():
         if value is not None:
             setattr(anuncio, field, value)
 
-    if dados.imagens is not None:
+    valid_files = [f for f in imagens if f.filename]
+    if len(valid_files) > _MAX_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Máximo de {_MAX_IMAGES} imagens por anúncio.",
+        )
+
+    if valid_files:
+        existing = db.query(AnuncioImagem).filter(AnuncioImagem.anuncio_id == anuncio_id).all()
+        _delete_image_files(existing)
         db.query(AnuncioImagem).filter(AnuncioImagem.anuncio_id == anuncio_id).delete()
-        for i, url in enumerate(dados.imagens):
-            db.add(AnuncioImagem(anuncio_id=anuncio_id, url=url, ordem=i))
+        for i, file in enumerate(valid_files):
+            url, content_type = _save_image(file)
+            db.add(AnuncioImagem(anuncio_id=anuncio_id, url=url, content_type=content_type, ordem=i))
 
     db.commit()
     return _get_anuncio_or_404(anuncio_id, db)
@@ -192,5 +280,6 @@ def excluir_anuncio(
     anuncio = _get_anuncio_or_404(anuncio_id, db)
     if anuncio.usuario_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+    _delete_image_files(anuncio.imagens)
     db.delete(anuncio)
     db.commit()

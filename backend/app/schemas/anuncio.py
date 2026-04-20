@@ -10,7 +10,9 @@ from app.schemas.usuario import UsuarioPublico
 class AnuncioImagemResponse(BaseModel):
     id: int
     url: str
+    content_type: str
     ordem: int
+    criado_em: datetime
 
     model_config = {"from_attributes": True}
 
@@ -23,7 +25,6 @@ class AnuncioCreate(BaseModel):
     categoria_id: Optional[int] = None
     localizacao: Optional[str] = Field(None, max_length=255)
     cep: Optional[str] = Field(None, max_length=9, pattern=r"^\d{5}-?\d{3}$")
-    imagens: list[str] = Field(default_factory=list, description="Lista de URLs de imagens")
 
 
 class AnuncioUpdate(BaseModel):
@@ -34,7 +35,6 @@ class AnuncioUpdate(BaseModel):
     categoria_id: Optional[int] = None
     localizacao: Optional[str] = Field(None, max_length=255)
     cep: Optional[str] = Field(None, max_length=9, pattern=r"^\d{5}-?\d{3}$")
-    imagens: Optional[list[str]] = None
 
 
 class AnuncioStatusUpdate(BaseModel):

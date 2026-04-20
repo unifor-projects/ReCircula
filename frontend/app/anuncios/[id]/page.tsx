@@ -6,7 +6,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Button from '@/components/Button';
 import { useAuth } from '@/contexts/AuthContext';
-import api from '@/services/api';
+import api, { API_BASE_URL } from '@/services/api';
+
+function getImageUrl(url: string): string {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+}
 
 interface AnuncioImagem {
   id: number;
@@ -75,9 +80,15 @@ function formatarData(dataISO: string): string {
 }
 
 function getApiError(error: unknown): string {
-  return error instanceof AxiosError
-    ? ((error.response?.data as { detail?: string } | undefined)?.detail ?? 'Erro ao processar a requisição.')
-    : 'Erro ao processar a requisição.';
+  if (error instanceof AxiosError) {
+    const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((e: Record<string, unknown>) => String(e.msg ?? e)).join('; ');
+    }
+    return 'Erro ao processar a requisição.';
+  }
+  return 'Erro ao processar a requisição.';
 }
 
 function getInitials(nome: string): string {
@@ -202,7 +213,7 @@ export default function AnuncioDetailPage() {
                 <>
                   <div className="relative flex h-80 items-center justify-center overflow-hidden bg-gray-100">
                     <img
-                      src={anuncio.imagens[activeImage]?.url}
+                      src={getImageUrl(anuncio.imagens[activeImage]?.url ?? '')}
                       alt={anuncio.titulo}
                       className="h-full w-full object-contain"
                     />
@@ -216,7 +227,7 @@ export default function AnuncioDetailPage() {
                           onClick={() => setActiveImage(i)}
                           className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 transition ${i === activeImage ? 'border-green-600' : 'border-transparent opacity-60 hover:opacity-100'}`}
                         >
-                          <img src={img.url} alt="" className="h-full w-full object-cover" />
+                          <img src={getImageUrl(img.url)} alt="" className="h-full w-full object-cover" />
                         </button>
                       ))}
                     </div>

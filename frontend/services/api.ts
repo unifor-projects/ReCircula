@@ -8,6 +8,8 @@ if (!baseURL) {
   throw new Error('NEXT_PUBLIC_API_URL must be defined in production builds');
 }
 
+export const API_BASE_URL = baseURL;
+
 const api = axios.create({
   baseURL,
   withCredentials: true,

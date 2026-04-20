@@ -83,14 +83,18 @@ class Anuncio(Base):
 
 
 class AnuncioImagem(Base):
-    __tablename__ = "anuncio_imagens"
+    __tablename__ = "images"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     anuncio_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("anuncios.id", ondelete="CASCADE"), nullable=False, index=True
     )
     url: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(50), nullable=False)
     ordem: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
 
     anuncio: Mapped["Anuncio"] = relationship("Anuncio", back_populates="imagens")
 
