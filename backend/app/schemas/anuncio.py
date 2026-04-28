@@ -59,6 +59,8 @@ class AnuncioResponse(BaseModel):
     status: StatusAnuncio
     localizacao: Optional[str]
     cep: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
     usuario_id: int
     categoria_id: Optional[int]
     criado_em: datetime
@@ -78,6 +80,8 @@ class AnuncioListResponse(BaseModel):
     status: StatusAnuncio
     localizacao: Optional[str]
     cep: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
     criado_em: datetime
     imagens: list[AnuncioImagemResponse]
     categoria: Optional[CategoriaResponse]
