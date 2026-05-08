@@ -92,7 +92,7 @@ def _delete_image_files(imagens: list[AnuncioImagem]) -> None:
 
 
 @router.get("/", response_model=List[AnuncioListResponse], summary="Buscar e listar anúncios")
-def listar_anuncios(
+async def listar_anuncios(
     q: Optional[str] = Query(None, description="Busca por título ou descrição"),
     categoria_id: Optional[int] = Query(None),
     tipo: Optional[str] = Query(None, description="doacao | troca"),
@@ -109,10 +109,9 @@ def listar_anuncios(
     tipo, CEP e status. Anúncios concluídos são ocultados por padrão (RF04, RF06.2).
 
     Parâmetros de geolocalização (RF04.3, RF04.4, RNF03):
-    - ``cep``: CEP de referência para filtro por proximidade.
-    - ``raio_km``: Raio máximo em km. Exige que o anúncio possua coordenadas salvas
-      e que o CEP de busca tenha sido geocodificado previamente. Quando omitido,
-      o CEP é usado apenas como prefixo (comportamento anterior).
+    - ``cep``: CEP de referência para filtro por proximidade (com ou sem hífen).
+    - ``raio_km``: Raio máximo em km. O CEP de busca é geocodificado diretamente,
+      e todos os anúncios com coordenadas dentro do raio são retornados.
     - ``ordenar=proximo``: Ordena os resultados pela distância ao CEP fornecido.
     """
     query = db.query(Anuncio).options(*_load_options)
@@ -144,22 +143,12 @@ def listar_anuncios(
 
     if cep:
         cep_digits = cep.replace("-", "").strip()
+        # Geocodificar se há raio ou ordenação por proximidade
+        if raio_km is not None or ordenar == "proximo":
+            ref_lat, ref_lon = await geocode_cep(cep_digits)
+        
         if raio_km is not None:
-            # Tentar obter coordenadas do anúncio de referência pelo CEP de busca.
-            # Para evitar chamada assíncrona em rota síncrona, buscamos um anúncio
-            # com o mesmo prefixo de CEP que já tenha coordenadas geocodificadas.
-            # Se não houver nenhum, caímos no filtro de prefixo.
-            ref_anuncio = (
-                db.query(Anuncio.latitude, Anuncio.longitude)
-                .filter(
-                    Anuncio.cep.ilike(f"{cep_digits[:5]}%"),
-                    Anuncio.latitude.isnot(None),
-                    Anuncio.longitude.isnot(None),
-                )
-                .first()
-            )
-            if ref_anuncio and ref_anuncio[0] is not None:
-                ref_lat, ref_lon = ref_anuncio
+            if ref_lat is not None and ref_lon is not None:
                 # Bounding-box pre-filter: ±delta graus ao redor do ponto de referência.
                 # 1 grau de latitude ≈ 111 km; longitude varia com cosseno da latitude.
                 delta_lat = raio_km / _KM_PER_DEGREE_LAT
@@ -173,14 +162,15 @@ def listar_anuncios(
                     Anuncio.longitude.between(ref_lon - delta_lon, ref_lon + delta_lon),
                 )
             else:
-                # Sem coordenadas de referência → fallback: filtrar por prefixo de CEP
+                # Se não conseguir geocodificar o CEP, fallback: filtrar por prefixo de CEP
                 query = query.filter(Anuncio.cep.ilike(f"{cep_digits[:5]}%"))
         else:
+            # Sem raio_km: apenas filtro por prefixo de CEP
             query = query.filter(Anuncio.cep.ilike(f"{cep_digits[:5]}%"))
 
     if ordenar == "antigo":
         query = query.order_by(Anuncio.criado_em.asc())
-    elif ordenar == "proximo" and ref_lat is not None:
+    elif ordenar == "proximo" and ref_lat is not None and ref_lon is not None:
         # Ordenação por proximidade: busca todos os candidatos e ordena em memória
         candidates = query.all()
         candidates.sort(

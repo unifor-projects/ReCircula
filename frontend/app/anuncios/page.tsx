@@ -29,25 +29,6 @@ function formatCepInput(value: string): string {
   return digits.length <= 5 ? digits : `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
-function cepParaRaio(cep: string, raio: string): string {
-  const digits = cep.replace(/\D/g, '');
-  if (!digits) return '';
-  const tamanho: Record<string, number> = { '5': 5, '10': 4, '25': 3, '50': 2 };
-  return digits.slice(0, tamanho[raio] ?? 5);
-}
-
-function cepProximidade(base: string, anuncio: string | null): number {
-  if (!anuncio) return -1;
-  const a = base.replace(/\D/g, '');
-  const b = anuncio.replace(/\D/g, '');
-  let score = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] === b[i]) score++;
-    else break;
-  }
-  return score;
-}
-
 // ── tipos ─────────────────────────────────────────────────────────────────────
 
 interface AnuncioImagem {
@@ -259,12 +240,14 @@ export default function AnunciosPage() {
       if (filtros.categoria_id) sp.set('categoria_id', filtros.categoria_id);
       if (filtros.status) sp.set('status', filtros.status);
 
+      // CEP e raio: enviar CEP completo + raio_km
       const cepDigits = (filtros.cep ?? '').replace(/\D/g, '');
-      if (cepDigits) sp.set('cep', cepParaRaio(cepDigits, filtros.raio ?? '5'));
+      if (cepDigits) {
+        sp.set('cep', cepDigits); // CEP completo com 8 dígitos
+        if (filtros.raio) sp.set('raio_km', filtros.raio); // Raio em km
+      }
 
-      const ordenarBackend =
-        filtros.ordenar === 'proximo' ? 'recente' : (filtros.ordenar ?? 'recente');
-      sp.set('ordenar', ordenarBackend);
+      sp.set('ordenar', filtros.ordenar ?? 'recente');
 
       // Busca PAGE_SIZE + 1 para detectar se há próxima página
       sp.set('limit', String(PAGE_SIZE + 1));
@@ -274,12 +257,6 @@ export default function AnunciosPage() {
 
       const temMais = data.length > PAGE_SIZE;
       const resultado = temMais ? data.slice(0, PAGE_SIZE) : data;
-
-      if (filtros.ordenar === 'proximo' && cepDigits) {
-        resultado.sort(
-          (a, b) => cepProximidade(cepDigits, b.cep) - cepProximidade(cepDigits, a.cep),
-        );
-      }
 
       setAnuncios(resultado);
       setHasMore(temMais);

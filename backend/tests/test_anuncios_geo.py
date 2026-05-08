@@ -199,13 +199,21 @@ class TestFiltroProximidade:
         resp = client.get("/anuncios/", params={"ordenar": "proximo"})
         assert resp.status_code == 200
 
-    def test_ordenar_proximo_com_coordenadas(self, client, db_session):
+    def test_ordenar_proximo_com_coordenadas(self, client, db_session, monkeypatch):
         """ordenar=proximo deve colocar o anúncio mais próximo primeiro."""
+        from app.routers.anuncios import geocode_cep as original_geocode
+        
+        async def mock_geocode_cep(cep):
+            # Retorna sempre as coordenadas de Fortaleza
+            return (-3.73, -38.52)
+        
         user = _make_user(db_session, "geo5")
         perto = _make_anuncio(db_session, user, "60180160", -3.73, -38.52, "Muito perto")
         longe = _make_anuncio(db_session, user, "60180160", -3.80, -38.60, "Um pouco longe")
 
-        # Ponto de referência próximo de perto
+        # Monkeypatch geocode_cep no módulo routers.anuncios
+        monkeypatch.setattr("app.routers.anuncios.geocode_cep", mock_geocode_cep)
+        
         resp = client.get("/anuncios/", params={"cep": "60180160", "raio_km": 50, "ordenar": "proximo"})
         assert resp.status_code == 200
         ids = [a["id"] for a in resp.json()]
@@ -269,3 +277,80 @@ class TestFiltroProximidade:
         data = resp.json()
         assert data["latitude"] is None
         assert data["longitude"] is None
+
+    def test_raio_km_busca_por_cep_sem_anuncio_referencia(self, client, db_session):
+        """
+        BUG REPRODUÇÃO: Buscar com raio_km por um CEP que não tem anúncios de referência.
+        
+        CEP 60830-500 (região metropolitana de Fortaleza) ≈ -3.88, -38.45
+        CEP 61767-870 (Aquiraz, CE) ≈ -3.90, -38.35 (aproximadamente 10-15km)
+        
+        Com raio de 50km, o anúncio em 61767-870 deveria aparecer na busca
+        por 60830-500, mesmo que não haja anúncio com CEP 60830-500 no banco.
+        """
+        user = _make_user(db_session, "geo_bug")
+        
+        # Criar anúncio em CEP 61767-870 com coordenadas aproximadas (Aquiraz, CE)
+        anuncio_aquiraz = _make_anuncio(
+            db_session, user,
+            "61767870",
+            -3.90, -38.35,  # Coordenadas aproximadas de Aquiraz
+            "Item em Aquiraz"
+        )
+        
+        # NÃO criar anúncio com CEP 60830-500 (Fortaleza) para simular o bug:
+        # o endpoint precisa geocodificar o CEP de busca, não depender de anúncios existentes
+        
+        # Buscar com CEP 60830-500 com raio de 50km
+        # Deveria encontrar o anúncio em Aquiraz se o CEP fosse geocodificado corretamente
+        with patch("app.routers.anuncios.geocode_cep", new=AsyncMock(return_value=(-3.88, -38.45))):
+            resp = client.get(
+                "/anuncios/",
+                params={"cep": "60830500", "raio_km": 50}
+            )
+        
+        assert resp.status_code == 200
+        ids = [a["id"] for a in resp.json()]
+        
+        # Este teste FALHARÁ com o código anterior porque o endpoint tentava buscar
+        # um anúncio com prefixo 60830 para obter coordenadas, em vez de
+        # geocodificar o CEP 60830-500 diretamente. Com a correção, passa!
+        assert anuncio_aquiraz.id in ids, (
+            "Anúncio em 61767-870 (Aquiraz) deveria aparecer na busca "
+            "por 60830-500 (Fortaleza) com raio de 50km, mas não apareceu. "
+            "O endpoint deve geocodificar o CEP de entrada, não depender de "
+            "anúncios existentes com aquele prefixo."
+        )
+
+    def test_distancia_haversine_entre_ceps_60830_e_61767(self):
+        """
+        Valida o cálculo da distância Haversine entre os dois CEPs mencionados.
+        
+        CEP 60830-500 (Fortaleza) ≈ -3.88, -38.45
+        CEP 61767-870 (Aquiraz) ≈ -3.90, -38.35
+        
+        Distância esperada ≈ 8-12 km (dentro de 50km), deveria aparecer na busca.
+        """
+        # Coordenadas aproximadas para Fortaleza (CEP 60830-500)
+        lat_fortaleza = -3.88
+        lon_fortaleza = -38.45
+        
+        # Coordenadas aproximadas para Aquiraz (CEP 61767-870)
+        lat_aquiraz = -3.90
+        lon_aquiraz = -38.35
+        
+        # Calcular distância
+        dist = haversine_km(lat_fortaleza, lon_fortaleza, lat_aquiraz, lon_aquiraz)
+        
+        # A distância entre esses pontos deve estar em torno de 8-12 km
+        # Verificar que está dentro de 50km (o raio de busca do teste anterior)
+        assert dist < 50, (
+            f"Distância calculada ({dist:.2f} km) está ACIMA do raio de 50km. "
+            "Aquiraz deveria estar dentro deste raio de Fortaleza."
+        )
+        
+        # Verificar que a distância é razoável (maior que 0, menor que 20 km para cidades próximas)
+        assert 5 < dist < 20, (
+            f"Distância calculada ({dist:.2f} km) não parece correta. "
+            "Esperava-se entre 5 e 20 km para cidades no mesmo estado."
+        )

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 _VIACEP_URL = "https://viacep.com.br/ws/{cep}/json/"
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-_NOMINATIM_HEADERS = {"User-Agent": "ReCircula/1.0 (recircula@example.com)"}
+_NOMINATIM_HEADERS = {"User-Agent": "ReCircula/1.0 (recircula@gmail.com)"}
 _HTTP_TIMEOUT = 5.0  # seconds
 
 
@@ -42,7 +42,48 @@ async def geocode_cep(cep: str) -> tuple[Optional[float], Optional[float]]:
     if not address_query:
         return None, None
 
-    return await _nominatim_geocode(address_query)
+    # Tentar variações da consulta no Nominatim, removendo primeiro o bairro,
+    # depois rua+bairro, e por fim a cidade (deixando apenas UF e país).
+    parts = [p.strip() for p in address_query.split(",") if p.strip()]
+
+    def join_nonempty(items: list[str]) -> str:
+        return ", ".join(p for p in items if p)
+
+    variants: list[str] = []
+    # 1) consulta completa
+    variants.append(join_nonempty(parts))
+
+    # 2) remover bairro (assumindo formato: logradouro, bairro, localidade, uf, Brazil)
+    if len(parts) >= 3:
+        v = [parts[0]] + parts[2:]
+        variants.append(join_nonempty(v))
+
+    # 3) remover rua e bairro -> apenas localidade, uf, Brazil
+    if len(parts) >= 3:
+        v = parts[2:]
+        variants.append(join_nonempty(v))
+
+    # 4) remover cidade -> manter apenas UF e país (últimos dois elementos)
+    if len(parts) >= 2:
+        v = parts[-2:]
+        variants.append(join_nonempty(v))
+
+    # Remover duplicatas preservando ordem
+    seen = set()
+    unique_variants: list[str] = []
+    for q in variants:
+        if q and q not in seen:
+            seen.add(q)
+            unique_variants.append(q)
+
+    for q in unique_variants:
+        logger.debug("Nominatim: tentando consulta variante: %s", q)
+        lat, lon = await _nominatim_geocode(q)
+        if lat is not None and lon is not None:
+            return lat, lon
+
+    # Se nenhuma variante funcionou, retorna None
+    return None, None
 
 
 async def _viacep_to_query(cep_digits: str) -> Optional[str]:
@@ -69,7 +110,6 @@ async def _viacep_to_query(cep_digits: str) -> Optional[str]:
         "Brazil",
     ]
     return ", ".join(p for p in parts if p)
-
 
 async def _nominatim_geocode(query: str) -> tuple[Optional[float], Optional[float]]:
     """Geocodifica *query* via Nominatim e retorna ``(lat, lon)``."""
