@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlparse
 from uuid import uuid4
+import math
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
@@ -17,6 +18,7 @@ from app.schemas.anuncio import (
     AnuncioStatusUpdate,
     StatusHistoricoResponse,
 )
+from app.services.geocode import geocode_cep, haversine_km
 
 router = APIRouter(prefix="/anuncios", tags=["Anúncios"])
 
@@ -26,6 +28,10 @@ ANUNCIO_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 _ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif"}
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 _MAX_IMAGES = 3
+
+# Geo constants
+_KM_PER_DEGREE_LAT = 111.0  # approximate km per degree of latitude at the equator
+_COS_ZERO_GUARD = 1e-6  # prevents division by zero near the poles
 
 _load_options = [
     selectinload(Anuncio.imagens),
@@ -86,13 +92,14 @@ def _delete_image_files(imagens: list[AnuncioImagem]) -> None:
 
 
 @router.get("/", response_model=List[AnuncioListResponse], summary="Buscar e listar anúncios")
-def listar_anuncios(
+async def listar_anuncios(
     q: Optional[str] = Query(None, description="Busca por título ou descrição"),
     categoria_id: Optional[int] = Query(None),
     tipo: Optional[str] = Query(None, description="doacao | troca"),
     cep: Optional[str] = Query(None, description="Filtrar por CEP"),
+    raio_km: Optional[float] = Query(None, ge=0.1, le=500, description="Raio de busca em km (requer cep com coordenadas)"),
     status: Optional[str] = Query(None, description="disponivel | reservado | doado_trocado"),
-    ordenar: Optional[str] = Query("recente", description="recente | antigo"),
+    ordenar: Optional[str] = Query("recente", description="recente | antigo | proximo"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -100,6 +107,12 @@ def listar_anuncios(
     """
     Lista anúncios com suporte a busca por palavra-chave, filtragem por categoria,
     tipo, CEP e status. Anúncios concluídos são ocultados por padrão (RF04, RF06.2).
+
+    Parâmetros de geolocalização (RF04.3, RF04.4, RNF03):
+    - ``cep``: CEP de referência para filtro por proximidade (com ou sem hífen).
+    - ``raio_km``: Raio máximo em km. O CEP de busca é geocodificado diretamente,
+      e todos os anúncios com coordenadas dentro do raio são retornados.
+    - ``ordenar=proximo``: Ordena os resultados pela distância ao CEP fornecido.
     """
     query = db.query(Anuncio).options(*_load_options)
 
@@ -123,11 +136,49 @@ def listar_anuncios(
         )
     elif tipo:
         query = query.filter(Anuncio.tipo == tipo)
+
+    # ── Geolocalização (RF04.3, RF04.4) ──────────────────────────────────────
+    ref_lat: Optional[float] = None
+    ref_lon: Optional[float] = None
+
     if cep:
-        query = query.filter(Anuncio.cep.ilike(f"{cep[:5]}%"))
+        cep_digits = cep.replace("-", "").strip()
+        # Geocodificar se há raio ou ordenação por proximidade
+        if raio_km is not None or ordenar == "proximo":
+            ref_lat, ref_lon = await geocode_cep(cep_digits)
+        
+        if raio_km is not None:
+            if ref_lat is not None and ref_lon is not None:
+                # Bounding-box pre-filter: ±delta graus ao redor do ponto de referência.
+                # 1 grau de latitude ≈ 111 km; longitude varia com cosseno da latitude.
+                delta_lat = raio_km / _KM_PER_DEGREE_LAT
+                delta_lon = raio_km / (
+                    _KM_PER_DEGREE_LAT * max(math.cos(math.radians(ref_lat)), _COS_ZERO_GUARD)
+                )
+                query = query.filter(
+                    Anuncio.latitude.isnot(None),
+                    Anuncio.longitude.isnot(None),
+                    Anuncio.latitude.between(ref_lat - delta_lat, ref_lat + delta_lat),
+                    Anuncio.longitude.between(ref_lon - delta_lon, ref_lon + delta_lon),
+                )
+            else:
+                # Se não conseguir geocodificar o CEP, fallback: filtrar por prefixo de CEP
+                query = query.filter(Anuncio.cep.ilike(f"{cep_digits[:5]}%"))
+        else:
+            # Sem raio_km: apenas filtro por prefixo de CEP
+            query = query.filter(Anuncio.cep.ilike(f"{cep_digits[:5]}%"))
 
     if ordenar == "antigo":
         query = query.order_by(Anuncio.criado_em.asc())
+    elif ordenar == "proximo" and ref_lat is not None and ref_lon is not None:
+        # Ordenação por proximidade: busca todos os candidatos e ordena em memória
+        candidates = query.all()
+        candidates.sort(
+            key=lambda a: haversine_km(ref_lat, ref_lon, a.latitude, a.longitude)
+            if a.latitude is not None and a.longitude is not None
+            else float("inf")
+        )
+        return candidates[offset: offset + limit]
     else:
         query = query.order_by(Anuncio.criado_em.desc())
 
@@ -161,6 +212,8 @@ async def criar_anuncio(
             detail=f"Máximo de {_MAX_IMAGES} imagens por anúncio.",
         )
 
+    lat, lon = await geocode_cep(cep) if cep else (None, None)
+
     anuncio = Anuncio(
         titulo=titulo,
         descricao=descricao,
@@ -169,6 +222,8 @@ async def criar_anuncio(
         categoria_id=categoria_id,
         localizacao=localizacao,
         cep=cep,
+        latitude=lat,
+        longitude=lon,
         usuario_id=current_user.id,
     )
     db.add(anuncio)
@@ -203,6 +258,9 @@ async def atualizar_anuncio(
     if anuncio.usuario_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
 
+    # Captura o CEP atual antes de aplicar as alterações, para detectar mudança
+    cep_anterior = (anuncio.cep or "").replace("-", "").strip()
+
     fields = {
         "titulo": titulo,
         "tipo": tipo,
@@ -215,6 +273,14 @@ async def atualizar_anuncio(
     for field, value in fields.items():
         if value is not None:
             setattr(anuncio, field, value)
+
+    # Re-geocodificar se o CEP foi alterado (normaliza ambos para comparação sem hífen)
+    if cep is not None:
+        cep_novo = cep.replace("-", "").strip()
+        if cep_novo != cep_anterior:
+            lat, lon = await geocode_cep(cep)
+            anuncio.latitude = lat
+            anuncio.longitude = lon
 
     valid_files = [f for f in imagens if f.filename]
     if len(valid_files) > _MAX_IMAGES:

@@ -17,3 +17,6 @@ python-jose[cryptography]>=3.4.0
 # File uploads
 python-multipart>=0.0.22
 pillow>=12.2.0
+
+# HTTP client (ViaCEP / Nominatim geocoding)
+httpx>=0.27.0
