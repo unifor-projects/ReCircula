@@ -44,9 +44,8 @@ def test_get_usuario_por_id_retorna_perfil_publico_e_anuncios(client):
         "descricao": "Cadeira em bom estado para doação",
         "tipo": "doacao",
         "condicao": "usado",
-        "imagens": [],
     }
-    criar_anuncio = client.post("/anuncios/", json=anuncio_payload, headers=_headers(token))
+    criar_anuncio = client.post("/anuncios/", data=anuncio_payload, headers=_headers(token))
     assert criar_anuncio.status_code == 201
     anuncio_id = criar_anuncio.json()["id"]
 

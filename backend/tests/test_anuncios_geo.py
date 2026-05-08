@@ -177,12 +177,18 @@ class TestFiltroProximidade:
         longe_ids = [a for a in resp.json() if a["titulo"] == "Longe"]
         assert len(longe_ids) == 0
 
-    def test_raio_km_sem_coordenadas_cai_em_fallback(self, client, db_session):
-        """Se não há coordenadas salvas para o CEP de referência, usa prefixo."""
+    def test_raio_km_sem_coordenadas_cai_em_fallback(self, client, db_session, monkeypatch):
+        """Se a geocodificação do CEP falhar, usa filtro por prefixo como fallback."""
         user = _make_user(db_session, "geo3")
         # Anúncios sem coordenadas
         a1 = _make_anuncio(db_session, user, "60180160", None, None, "Sem coords 1")
         a2 = _make_anuncio(db_session, user, "01310100", None, None, "Sem coords 2")
+
+        # Simular falha de geocodificação para garantir o fallback por prefixo
+        async def mock_geocode_fail(cep):
+            return None, None
+
+        monkeypatch.setattr("app.routers.anuncios.geocode_cep", mock_geocode_fail)
 
         resp = client.get("/anuncios/", params={"cep": "60180160", "raio_km": 50})
         assert resp.status_code == 200
@@ -201,8 +207,6 @@ class TestFiltroProximidade:
 
     def test_ordenar_proximo_com_coordenadas(self, client, db_session, monkeypatch):
         """ordenar=proximo deve colocar o anúncio mais próximo primeiro."""
-        from app.routers.anuncios import geocode_cep as original_geocode
-        
         async def mock_geocode_cep(cep):
             # Retorna sempre as coordenadas de Fortaleza
             return (-3.73, -38.52)
