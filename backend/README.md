@@ -98,6 +98,7 @@ Após iniciar o servidor, acesse:
 | Anúncios               | `/anuncios`     | CRUD completo, busca e filtros           |
 | Categorias             | `/categorias`   | Gestão de categorias (admin)             |
 | Mensagens              | `/mensagens`    | Conversas internas entre usuários        |
+| Administração          | `/admin`        | Moderação de denúncias e ações admin     |
 | Denúncias/Moderação    | `/denuncias`    | Denunciar e resolver conteúdo inadequado |
 
 ## Requisitos funcionais cobertos
