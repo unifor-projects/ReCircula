@@ -104,6 +104,130 @@ def test_post_denuncias_cria_denuncia_de_usuario(client, db_session):
     assert body["status"] == "pendente"
 
 
+def test_post_denuncias_aceita_payload_legado_com_anuncio_id(client, db_session):
+    _, autor_token = _registrar_verificar_e_logar(client, db_session, "Autor Legado", "autor-legado@example.com")
+    anuncio = client.post(
+        "/anuncios/",
+        data={
+            "titulo": "Fogão usado",
+            "descricao": "Fogão funcionando para doação",
+            "tipo": "doacao",
+            "condicao": "usado",
+        },
+        headers=_headers(autor_token),
+    )
+    assert anuncio.status_code == 201
+    anuncio_id = anuncio.json()["id"]
+
+    _, denunciante_token = _registrar_verificar_e_logar(
+        client, db_session, "Denunciante Legado", "den-legado-anuncio@example.com"
+    )
+    resposta = client.post(
+        DENUNCIAS_URL,
+        json={
+            "anuncio_id": anuncio_id,
+            "motivo": "Violação de regras",
+            "descricao": "Detalhes da denúncia",
+        },
+        headers=_headers(denunciante_token),
+    )
+
+    assert resposta.status_code == 201
+    body = resposta.json()
+    assert body["anuncio_id"] == anuncio_id
+    assert body["usuario_denunciado_id"] is None
+
+
+def test_post_denuncias_aceita_payload_legado_com_usuario_denunciado_id(client, db_session):
+    alvo_id, _ = _registrar_verificar_e_logar(client, db_session, "Alvo Legado", "alvo-legado@example.com")
+    _, denunciante_token = _registrar_verificar_e_logar(
+        client, db_session, "Denunciante Legado", "den-legado-usuario@example.com"
+    )
+    resposta = client.post(
+        DENUNCIAS_URL,
+        json={
+            "usuario_denunciado_id": alvo_id,
+            "motivo": "Perfil falso",
+            "descricao": "Descrição detalhada",
+        },
+        headers=_headers(denunciante_token),
+    )
+
+    assert resposta.status_code == 201
+    body = resposta.json()
+    assert body["usuario_denunciado_id"] == alvo_id
+    assert body["anuncio_id"] is None
+
+
+def test_post_denuncias_rejeita_payload_legado_ambiguo(client, db_session):
+    _, token = _registrar_verificar_e_logar(client, db_session, "Denunciante", "den-ambiguo@example.com")
+    resposta = client.post(
+        DENUNCIAS_URL,
+        json={
+            "anuncio_id": 1,
+            "usuario_denunciado_id": 2,
+            "motivo": "Motivo válido",
+            "descricao": "Descrição",
+        },
+        headers=_headers(token),
+    )
+
+    assert resposta.status_code == 422
+    assert "exatamente um alvo" in resposta.text.lower()
+
+
+def test_post_denuncias_rejeita_mistura_contrato_novo_com_legado(client, db_session):
+    _, token = _registrar_verificar_e_logar(client, db_session, "Denunciante", "den-misto@example.com")
+    resposta = client.post(
+        DENUNCIAS_URL,
+        json={
+            "tipo": "usuario",
+            "alvo_id": 1,
+            "anuncio_id": 1,
+            "motivo": "Motivo válido",
+            "descricao": "Descrição",
+        },
+        headers=_headers(token),
+    )
+
+    assert resposta.status_code == 422
+    assert "exatamente um alvo" in resposta.text.lower()
+
+
+def test_post_denuncias_retorna_404_para_anuncio_inexistente(client, db_session):
+    _, token = _registrar_verificar_e_logar(client, db_session, "Denunciante", "den-404-anuncio@example.com")
+    resposta = client.post(
+        DENUNCIAS_URL,
+        json={
+            "tipo": "anuncio",
+            "alvo_id": 999999,
+            "motivo": "Conteúdo irregular",
+            "descricao": "Detalhes",
+        },
+        headers=_headers(token),
+    )
+
+    assert resposta.status_code == 404
+    assert resposta.json()["detail"] == "Anúncio não encontrado"
+
+
+def test_post_denuncias_retorna_404_para_usuario_inexistente(client, db_session):
+    _, token = _registrar_verificar_e_logar(client, db_session, "Denunciante", "den-404-usuario@example.com")
+    resposta = client.post(
+        DENUNCIAS_URL,
+        json={
+            "tipo": "usuario",
+            "alvo_id": 999999,
+            "motivo": "Comportamento inadequado",
+            "descricao": "Detalhes",
+        },
+        headers=_headers(token),
+    )
+
+    assert resposta.status_code == 404
+    assert resposta.json()["detail"] == "Usuário não encontrado"
+
+
 def test_post_denuncias_exige_autenticacao(client):
     resposta = client.post(
         DENUNCIAS_URL,
