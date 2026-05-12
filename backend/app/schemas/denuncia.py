@@ -23,16 +23,39 @@ class DenunciaCreate(BaseModel):
     def _normalizar_payload_legado(cls, data):
         if not isinstance(data, dict):
             return data
-        if data.get("tipo") is not None and data.get("alvo_id") is not None:
-            return data
-        if data.get("anuncio_id") is not None:
-            data["tipo"] = TipoDenuncia.anuncio
-            data["alvo_id"] = data["anuncio_id"]
-            return data
-        if data.get("usuario_denunciado_id") is not None:
-            data["tipo"] = TipoDenuncia.usuario
-            data["alvo_id"] = data["usuario_denunciado_id"]
-        return data
+
+        normalized = data.copy()
+        has_tipo = normalized.get("tipo") is not None
+        has_alvo_id = normalized.get("alvo_id") is not None
+        has_canonical = has_tipo or has_alvo_id
+        has_complete_canonical = has_tipo and has_alvo_id
+        has_anuncio_legacy = normalized.get("anuncio_id") is not None
+        has_usuario_legacy = normalized.get("usuario_denunciado_id") is not None
+        legacy_targets = int(has_anuncio_legacy) + int(has_usuario_legacy)
+
+        if has_canonical and legacy_targets:
+            raise ValueError(
+                "Envie exatamente um alvo: use 'tipo' e 'alvo_id' ou um único campo legado."
+            )
+
+        if legacy_targets > 1:
+            raise ValueError(
+                "Envie exatamente um alvo: 'anuncio_id' e 'usuario_denunciado_id' são mutuamente exclusivos."
+            )
+
+        if has_complete_canonical:
+            return normalized
+
+        if has_anuncio_legacy:
+            normalized["tipo"] = TipoDenuncia.anuncio
+            normalized["alvo_id"] = normalized["anuncio_id"]
+            return normalized
+
+        if has_usuario_legacy:
+            normalized["tipo"] = TipoDenuncia.usuario
+            normalized["alvo_id"] = normalized["usuario_denunciado_id"]
+
+        return normalized
 
 
 class DenunciaResolucao(BaseModel):
