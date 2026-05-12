@@ -7,8 +7,8 @@ from app.database import get_db
 from app.deps import get_current_user, get_current_admin
 from app.models.usuario import Usuario
 from app.models.anuncio import Anuncio
-from app.models.denuncia import Denuncia
-from app.schemas.denuncia import DenunciaCreate, DenunciaResolucao, DenunciaResponse
+from app.models.denuncia import Denuncia, StatusDenuncia
+from app.schemas.denuncia import DenunciaCreate, DenunciaResolucao, DenunciaResponse, TipoDenuncia
 
 router = APIRouter(prefix="/denuncias", tags=["Denúncias e Moderação"])
 
@@ -20,24 +20,24 @@ def criar_denuncia(
     current_user: Usuario = Depends(get_current_user),
 ):
     """Registra uma denúncia contra um anúncio ou usuário (RF07.1)."""
-    if not dados.anuncio_id and not dados.usuario_denunciado_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Informe o anuncio_id ou usuario_denunciado_id",
-        )
-    if dados.anuncio_id:
-        anuncio = db.get(Anuncio, dados.anuncio_id)
+    anuncio_id = None
+    usuario_denunciado_id = None
+
+    if dados.tipo == TipoDenuncia.anuncio:
+        anuncio = db.get(Anuncio, dados.alvo_id)
         if not anuncio:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anúncio não encontrado")
-    if dados.usuario_denunciado_id:
-        usuario = db.get(Usuario, dados.usuario_denunciado_id)
+        anuncio_id = dados.alvo_id
+    else:
+        usuario = db.get(Usuario, dados.alvo_id)
         if not usuario:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+        usuario_denunciado_id = dados.alvo_id
 
     denuncia = Denuncia(
         denunciante_id=current_user.id,
-        anuncio_id=dados.anuncio_id,
-        usuario_denunciado_id=dados.usuario_denunciado_id,
+        anuncio_id=anuncio_id,
+        usuario_denunciado_id=usuario_denunciado_id,
         motivo=dados.motivo,
         descricao=dados.descricao,
     )
@@ -55,6 +55,7 @@ def listar_denuncias(
     """Lista todas as denúncias pendentes (RF07.2)."""
     return (
         db.query(Denuncia)
+        .filter(Denuncia.status == StatusDenuncia.pendente)
         .order_by(Denuncia.criado_em.desc())
         .all()
     )
