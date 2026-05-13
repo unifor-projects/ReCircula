@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from app.models.anuncio import AnuncioImagem
 
 ANUNCIO_IMAGES_DIR = Path(__file__).resolve().parents[2] / "uploads" / "anuncios"
+ANUNCIO_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def delete_image_files(imagens: list[AnuncioImagem]) -> None:

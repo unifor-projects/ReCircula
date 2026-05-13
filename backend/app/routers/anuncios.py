@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import List, Optional
 from uuid import uuid4
 import math
@@ -18,12 +17,9 @@ from app.schemas.anuncio import (
     StatusHistoricoResponse,
 )
 from app.services.geocode import geocode_cep, haversine_km
-from app.services.uploads import delete_image_files
+from app.services.uploads import ANUNCIO_IMAGES_DIR, delete_image_files
 
 router = APIRouter(prefix="/anuncios", tags=["Anúncios"])
-
-ANUNCIO_IMAGES_DIR = Path(__file__).resolve().parents[2] / "uploads" / "anuncios"
-ANUNCIO_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 _ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif"}
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
