@@ -26,13 +26,13 @@ class DecisaoAdministrativa(Base):
         Integer, ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     denuncia_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("denuncias.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer, ForeignKey("denuncias.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     anuncio_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("anuncios.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer, ForeignKey("anuncios.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     usuario_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer, ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     acao: Mapped[AcaoAdministrativa] = mapped_column(
         Enum(AcaoAdministrativa, name="acao_administrativa"), nullable=False, index=True
