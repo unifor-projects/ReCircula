@@ -10,7 +10,7 @@ from app.models.anuncio import Anuncio
 from app.models.decisao_administrativa import AcaoAdministrativa, DecisaoAdministrativa
 from app.models.denuncia import Denuncia, StatusDenuncia
 from app.models.usuario import Usuario
-from app.routers.anuncios import _delete_image_files
+from app.services.uploads import delete_image_files
 from app.schemas.admin import AcaoModeracao, ResolverDenunciaAdminRequest
 from app.schemas.denuncia import DenunciaResponse
 from app.schemas.usuario import UsuarioResponse
@@ -78,7 +78,7 @@ def resolver_denuncia_admin(
         anuncio = db.get(Anuncio, denuncia.anuncio_id)
         if anuncio:
             usuario_afetado_id = anuncio.usuario_id
-            _delete_image_files(anuncio.imagens)
+            delete_image_files(anuncio.imagens)
             db.delete(anuncio)
     elif dados.acao == AcaoModeracao.suspender_usuario:
         if not denuncia.usuario_denunciado_id:
@@ -115,7 +115,7 @@ def remover_anuncio_admin(
     anuncio = db.get(Anuncio, anuncio_id)
     if not anuncio:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anúncio não encontrado")
-    _delete_image_files(anuncio.imagens)
+    delete_image_files(anuncio.imagens)
     db.delete(anuncio)
     _registrar_log(
         db,
