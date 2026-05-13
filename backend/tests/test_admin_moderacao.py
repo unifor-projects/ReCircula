@@ -84,7 +84,9 @@ def test_patch_admin_denuncia_resolver_com_acao_remove_anuncio_e_gera_log(client
     _, admin_token = _registrar_verificar_e_logar(
         client, db_session, "Admin", "admin-rf07-resolver@example.com", admin=True
     )
-    _, autor_token = _registrar_verificar_e_logar(client, db_session, "Autor", "autor-rf07-resolver@example.com")
+    autor_id, autor_token = _registrar_verificar_e_logar(
+        client, db_session, "Autor", "autor-rf07-resolver@example.com"
+    )
     _, denunciante_token = _registrar_verificar_e_logar(
         client, db_session, "Denunciante", "den-rf07-resolver@example.com"
     )
@@ -133,6 +135,7 @@ def test_patch_admin_denuncia_resolver_com_acao_remove_anuncio_e_gera_log(client
     assert len(logs) == 1
     assert logs[0].acao == AcaoAdministrativa.remover_anuncio
     assert logs[0].denuncia_id == denuncia_id
+    assert logs[0].usuario_id == autor_id
 
 
 def test_delete_admin_anuncio_remove_e_registra_log(client, db_session):

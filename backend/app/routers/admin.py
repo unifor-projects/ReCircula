@@ -68,6 +68,7 @@ def resolver_denuncia_admin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Denúncia não encontrada")
 
     acao = AcaoAdministrativa(dados.acao.value)
+    usuario_afetado_id = denuncia.usuario_denunciado_id
     if dados.acao == AcaoModeracao.remover_anuncio:
         if not denuncia.anuncio_id:
             raise HTTPException(
@@ -76,6 +77,7 @@ def resolver_denuncia_admin(
             )
         anuncio = db.get(Anuncio, denuncia.anuncio_id)
         if anuncio:
+            usuario_afetado_id = anuncio.usuario_id
             _delete_image_files(anuncio.imagens)
             db.delete(anuncio)
     elif dados.acao == AcaoModeracao.suspender_usuario:
@@ -96,7 +98,7 @@ def resolver_denuncia_admin(
         admin_id=admin.id,
         denuncia_id=denuncia.id,
         anuncio_id=denuncia.anuncio_id,
-        usuario_id=denuncia.usuario_denunciado_id,
+        usuario_id=usuario_afetado_id,
         acao=acao,
     )
     db.commit()
