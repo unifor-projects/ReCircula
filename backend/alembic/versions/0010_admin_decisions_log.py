@@ -40,9 +40,9 @@ def upgrade() -> None:
         ),
         sa.Column("criado_em", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["admin_id"], ["usuarios.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["anuncio_id"], ["anuncios.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["denuncia_id"], ["denuncias.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["usuario_id"], ["usuarios.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["anuncio_id"], ["anuncios.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["denuncia_id"], ["denuncias.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["usuario_id"], ["usuarios.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
