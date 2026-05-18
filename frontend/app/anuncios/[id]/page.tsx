@@ -1,12 +1,14 @@
 'use client';
 
 import { AxiosError } from 'axios';
+import { MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Button from '@/components/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import api, { API_BASE_URL } from '@/services/api';
+import type { ChatConversation } from '@/types/chat';
 
 function getImageUrl(url: string): string {
   if (!url) return '';
@@ -118,6 +120,8 @@ export default function AnuncioDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [isStartingChat, setIsStartingChat] = useState(false);
+
   const isOwner = !!user && user.id === anuncio?.usuario_id;
 
   useEffect(() => {
@@ -166,6 +170,19 @@ export default function AnuncioDetailPage() {
       setErrorMessage(getApiError(error));
       setShowDeleteConfirm(false);
       setIsDeleting(false);
+    }
+  }
+
+  async function handleStartChat() {
+    if (!anuncio || isStartingChat) return;
+    setIsStartingChat(true);
+    try {
+      const { data } = await api.post<ChatConversation>('/api/chat/conversations', {
+        user_id: anuncio.usuario.id,
+      });
+      router.push(`/chat?conv=${data.id}`);
+    } catch {
+      setIsStartingChat(false);
     }
   }
 
@@ -326,6 +343,28 @@ export default function AnuncioDetailPage() {
                   )}
                 </div>
               </Link>
+
+              {!isOwner && user && (
+                <button
+                  type="button"
+                  onClick={() => void handleStartChat()}
+                  disabled={isStartingChat}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-60"
+                >
+                  <MessageCircle size={16} />
+                  {isStartingChat ? 'Abrindo conversa...' : 'Enviar mensagem'}
+                </button>
+              )}
+
+              {!isOwner && !user && (
+                <Link
+                  href="/login"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-green-600 px-4 py-2.5 text-sm font-medium text-green-600 transition hover:bg-green-50"
+                >
+                  <MessageCircle size={16} />
+                  Entre para enviar mensagem
+                </Link>
+              )}
             </div>
 
             {/* Gerenciar (dono) */}

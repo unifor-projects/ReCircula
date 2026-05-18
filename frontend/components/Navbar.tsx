@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import { MessageSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavStore } from '@/store/navStore';
+import { useChatStore } from '@/store/chatStore';
 
 const HIDDEN_PATHS = [
   '/login',
@@ -60,6 +62,7 @@ export default function Navbar() {
   const pathname = rawPathname ?? '';
   const { user, isAuthenticated, logout } = useAuth();
   const { isMobileMenuOpen, toggleMobileMenu, closeMobileMenu } = useNavStore();
+  const totalUnread = useChatStore((s) => s.totalUnread);
 
   useEffect(() => {
     closeMobileMenu();
@@ -101,6 +104,18 @@ export default function Navbar() {
         <div className="hidden items-center gap-3 md:flex">
           {isAuthenticated && user ? (
             <>
+              <Link
+                href="/chat"
+                aria-label="Mensagens"
+                className="relative rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-green-600"
+              >
+                <MessageSquare className="h-5 w-5" />
+                {totalUnread > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-green-600 text-[10px] font-bold text-white">
+                    {totalUnread > 9 ? '9+' : totalUnread}
+                  </span>
+                )}
+              </Link>
               <Link
                 href={`/perfil/${user.id}`}
                 className="flex items-center gap-2 text-sm font-medium text-gray-700 transition-colors hover:text-green-600"
@@ -178,6 +193,13 @@ export default function Navbar() {
                 pathname={pathname}
               />
             ))}
+            {isAuthenticated && (
+              <MobileNavLink
+                href="/chat"
+                label={totalUnread > 0 ? `Mensagens (${totalUnread})` : 'Mensagens'}
+                pathname={pathname}
+              />
+            )}
 
             <div className="my-2 border-t border-gray-100" />
 

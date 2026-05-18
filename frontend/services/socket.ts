@@ -11,12 +11,15 @@ export function getSocket(): Socket | null {
 }
 
 export function connectSocket(token: string): Socket {
-  if (socket?.connected) {
+  if (socket) {
+    // Keep the existing socket (reconnection is automatic).
+    // Update auth so the next reconnect uses the latest token.
+    socket.auth = { token };
     return socket;
   }
 
   socket = io(BASE_URL!, {
-    path: '/ws/socket.io',
+    path: '/socket.io',
     auth: { token },
     transports: ['websocket', 'polling'],
     reconnection: true,

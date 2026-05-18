@@ -48,29 +48,31 @@ interface Props {
 }
 
 export default function ChatWindow({ conversation, currentUserId, onBack }: Props) {
-  const messages = useChatStore((s) => s.messages[conversation.id] ?? []);
-  const setMessages = useChatStore((s) => s.setMessages);
-  const prependMessages = useChatStore((s) => s.prependMessages);
-  const clearUnread = useChatStore((s) => s.clearUnread);
-  const typingUsers = useChatStore((s) =>
-    s.typingUsers.filter((t) => t.conversation_id === conversation.id),
-  );
-  const onlineUsers = useChatStore((s) => s.onlineUsers);
-
+  // Local state — guaranteed to trigger re-renders when updated
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
 
+  const clearUnread = useChatStore((s) => s.clearUnread);
+  const allTypingUsers = useChatStore((s) => s.typingUsers);
+  const typingUsers = allTypingUsers.filter((t) => t.conversation_id === conversation.id);
+  const onlineUsers = useChatStore((s) => s.onlineUsers);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const conversationIdRef = useRef(conversation.id);
+  conversationIdRef.current = conversation.id;
 
   const other = conversation.participants.find((p) => p.user_id !== currentUserId);
   const otherName = other?.user.nome ?? 'Usuário';
   const isOnline = other ? onlineUsers.has(other.user_id) : false;
 
+  // Load initial messages and join the socket room
   useEffect(() => {
+    setMessages([]);
     setInitialLoaded(false);
     shouldAutoScroll.current = true;
 
@@ -79,7 +81,7 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
         params: { limit: 50 },
       })
       .then((res) => {
-        setMessages(conversation.id, res.data.messages);
+        setMessages(res.data.messages);
         setHasMore(res.data.has_more);
         setNextCursor(res.data.next_cursor);
         setInitialLoaded(true);
@@ -87,12 +89,52 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
       .catch(() => {});
 
     clearUnread(conversation.id);
+
     const socket = getSocket();
     if (socket) {
       socket.emit('mark_as_read', { conversation_id: conversation.id });
+      socket.emit('join_room', { conversation_id: conversation.id });
     }
-  }, [conversation.id, setMessages, clearUnread]);
+  }, [conversation.id, clearUnread]);
 
+  // Listen directly to the socket for new messages.
+  // Using local state ensures React always re-renders when a message arrives,
+  // regardless of global store behaviour.
+  useEffect(() => {
+    const convId = conversation.id;
+
+    function handleNewMessage(msg: ChatMessage) {
+      if (msg.conversation_id !== convId) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      shouldAutoScroll.current = true;
+
+      // Mark as read if we are the recipient
+      if (msg.sender_id !== currentUserId) {
+        clearUnread(convId);
+        const socket = getSocket();
+        socket?.emit('mark_as_read', { conversation_id: convId, message_id: msg.id });
+      }
+    }
+
+    // Re-join room on socket reconnect so we never miss messages
+    function handleConnect() {
+      getSocket()?.emit('join_room', { conversation_id: convId });
+    }
+
+    const socket = getSocket();
+    socket?.on('new_message', handleNewMessage);
+    socket?.on('connect', handleConnect);
+
+    return () => {
+      socket?.off('new_message', handleNewMessage);
+      socket?.off('connect', handleConnect);
+    };
+  }, [conversation.id, currentUserId, clearUnread]);
+
+  // Auto-scroll when messages change
   useEffect(() => {
     if (shouldAutoScroll.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: initialLoaded ? 'smooth' : 'auto' });
@@ -115,7 +157,7 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
           params: { cursor: nextCursor, limit: 30 },
         })
         .then((res) => {
-          prependMessages(conversation.id, res.data.messages);
+          setMessages((prev) => [...res.data.messages, ...prev]);
           setHasMore(res.data.has_more);
           setNextCursor(res.data.next_cursor);
 
@@ -128,23 +170,7 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
         .catch(() => {})
         .finally(() => setLoadingMore(false));
     }
-  }, [conversation.id, hasMore, loadingMore, nextCursor, prependMessages]);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg.sender_id !== currentUserId) {
-        const socket = getSocket();
-        if (socket) {
-          socket.emit('mark_as_read', {
-            conversation_id: conversation.id,
-            message_id: lastMsg.id,
-          });
-        }
-        clearUnread(conversation.id);
-      }
-    }
-  }, [messages, conversation.id, currentUserId, clearUnread]);
+  }, [conversation.id, hasMore, loadingMore, nextCursor]);
 
   const handleSend = useCallback(
     (content: string) => {
@@ -250,9 +276,7 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
               <Circle size={4} className="animate-bounce fill-gray-400" style={{ animationDelay: '150ms' }} />
               <Circle size={4} className="animate-bounce fill-gray-400" style={{ animationDelay: '300ms' }} />
             </span>
-            <span>
-              {typingUsers.map((t) => t.username).join(', ')} está digitando...
-            </span>
+            <span>{typingUsers.map((t) => t.username).join(', ')} está digitando...</span>
           </div>
         )}
 

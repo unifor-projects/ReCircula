@@ -25,6 +25,15 @@ const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user';
 const REFRESH_BUFFER_MS = 60_000;
+const SESSION_COOKIE = 'rc_session';
+
+function setSessionCookie(token: string): void {
+  document.cookie = `${SESSION_COOKIE}=${token}; path=/; samesite=lax`;
+}
+
+function clearSessionCookie(): void {
+  document.cookie = `${SESSION_COOKIE}=; path=/; samesite=lax; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
 
 function getTokenExpirationMs(token: string): number | null {
   const [, payload] = token.split('.');
@@ -55,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
+    clearSessionCookie();
   }, []);
 
   const persistAuth = useCallback(
@@ -65,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
       sessionStorage.setItem(REFRESH_TOKEN_KEY, nextRefreshToken);
       sessionStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+      setSessionCookie(accessToken);
     },
     []
   );
@@ -79,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(storedToken);
         setRefreshToken(storedRefreshToken);
         setUser(parsedUser);
+        setSessionCookie(storedToken);
       } catch {
         clearAuthStorage();
       }
@@ -100,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setToken(response.data.access_token);
       sessionStorage.setItem(ACCESS_TOKEN_KEY, response.data.access_token);
+      setSessionCookie(response.data.access_token);
     } catch {
       clearAuthStorage();
       router.replace('/login');

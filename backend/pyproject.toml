@@ -17,6 +17,8 @@ dependencies = [
     "python-jose[cryptography]>=3.4.0",
     "python-multipart>=0.0.22",
     "pillow>=12.2.0",
+    "python-socketio>=5.11.0",
+    "bleach>=6.0.0",
 ]
 
 [dependency-groups]

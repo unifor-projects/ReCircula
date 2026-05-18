@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '@/store/chatStore';
 import { getSocket } from '@/services/socket';
@@ -12,6 +13,8 @@ import type { ChatConversation } from '@/types/chat';
 
 export default function ChatPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const convParam = searchParams?.get('conv') ?? null;
   const {
     conversations,
     setConversations,
@@ -32,6 +35,15 @@ export default function ChatPage() {
       })
       .catch(() => {});
   }, [setConversations, setTotalUnread]);
+
+  useEffect(() => {
+    if (!convParam || conversations.length === 0) return;
+    const targetId = Number(convParam);
+    if (!Number.isNaN(targetId) && targetId > 0) {
+      handleSelectConversation(targetId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convParam, conversations.length]);
 
   const handleSelectConversation = useCallback(
     (id: number) => {
@@ -69,7 +81,7 @@ export default function ChatPage() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-6xl overflow-hidden">
+    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-6xl overflow-hidden bg-slate-50">
       {/* Sidebar — hidden on mobile when chat is open */}
       <div
         className={`w-full flex-shrink-0 border-r border-gray-200 md:w-80 ${
@@ -86,11 +98,7 @@ export default function ChatPage() {
       </div>
 
       {/* Chat area */}
-      <div
-        className={`min-w-0 flex-1 ${
-          !mobileShowChat ? 'hidden md:flex' : 'flex'
-        } flex-col`}
-      >
+      <div className={`min-w-0 flex-1 ${!mobileShowChat ? 'hidden md:flex' : 'flex'} flex-col`}>
         {activeConversation ? (
           <ChatWindow
             conversation={activeConversation}

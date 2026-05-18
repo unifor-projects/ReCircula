@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timezone
 
 import bleach
+import socketio.exceptions
 from sqlalchemy.orm import selectinload
 
 from app.chat.presence import check_rate_limit, refresh_online, set_offline, set_online
