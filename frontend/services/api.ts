@@ -4,7 +4,9 @@ const baseURL =
   process.env.NEXT_PUBLIC_API_URL ??
   (process.env.NODE_ENV !== 'production' ? 'http://localhost:8000' : undefined);
 
-if (!baseURL) {
+// Only throw at runtime in the browser, never during SSR / static pre-rendering.
+// The env var must be set when deploying to production.
+if (typeof window !== 'undefined' && !baseURL) {
   throw new Error('NEXT_PUBLIC_API_URL must be defined in production builds');
 }
 

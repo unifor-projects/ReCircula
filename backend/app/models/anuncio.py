@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -49,6 +49,8 @@ class Anuncio(Base):
     )
     localizacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
     cep: Mapped[str | None] = mapped_column(String(9), nullable=True, index=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     usuario_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
     )
