@@ -81,7 +81,7 @@ export default function ChatPage() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-6xl overflow-hidden bg-slate-50">
+    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-4xl overflow-hidden bg-slate-50">
       {/* Sidebar — hidden on mobile when chat is open */}
       <div
         className={`w-full flex-shrink-0 border-r border-gray-200 md:w-80 ${
