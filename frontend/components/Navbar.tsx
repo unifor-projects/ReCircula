@@ -120,9 +120,6 @@ export default function Navbar() {
                 href={`/perfil/${user.id}`}
                 className="flex items-center gap-2 text-sm font-medium text-gray-700 transition-colors hover:text-green-600"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-xs font-semibold text-green-700">
-                  {getInitials(user.nome)}
-                </span>
                 <span className="hidden lg:block">{user.nome.split(' ')[0]}</span>
               </Link>
               <button

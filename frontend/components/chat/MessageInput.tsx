@@ -73,7 +73,7 @@ export default function MessageInput({ conversationId, onSend }: Props) {
           onKeyDown={handleKeyDown}
           placeholder="Digite uma mensagem..."
           rows={1}
-          className="max-h-32 min-h-[40px] flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-green-300 focus:bg-white"
+          className="max-h-32 min-h-[40px] flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition-colors focus:border-green-300 focus:bg-white"
           style={{ height: 'auto', overflow: 'hidden' }}
           onInput={(e) => {
             const target = e.target as HTMLTextAreaElement;
