@@ -98,6 +98,7 @@ Após iniciar o servidor, acesse:
 | Anúncios               | `/anuncios`     | CRUD completo, busca e filtros           |
 | Categorias             | `/categorias`   | Gestão de categorias (admin)             |
 | Mensagens              | `/mensagens`    | Conversas internas entre usuários        |
+| Administração          | `/admin`        | Moderação de denúncias e ações admin     |
 | Denúncias/Moderação    | `/denuncias`    | Denunciar e resolver conteúdo inadequado |
 
 ## Requisitos funcionais cobertos
@@ -110,4 +111,4 @@ Após iniciar o servidor, acesse:
 | RF04| Busca e filtragem                      | `GET /anuncios?q=&categoria_id=&cep=` |
 | RF05| Mensagens internas                     | `POST /mensagens/conversas`, `GET /mensagens/conversas` |
 | RF06| Gestão de status dos itens             | `PATCH /anuncios/{id}/status` |
-| RF07| Moderação e denúncias                  | `POST /denuncias`, `PATCH /denuncias/{id}/resolver` |
+| RF07| Moderação e denúncias                  | `POST /denuncias`, `PATCH /admin/denuncias/{id}/resolver` (`/denuncias/{id}/resolver` legado/depreciado) |
