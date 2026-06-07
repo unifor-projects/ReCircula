@@ -29,7 +29,7 @@ class DecisaoAdministrativa(Base):
         Integer, ForeignKey("denuncias.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     anuncio_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("anuncios.id", ondelete="RESTRICT"), nullable=True, index=True
+        Integer, ForeignKey("anuncios.id", ondelete="SET NULL"), nullable=True, index=True
     )
     usuario_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=True, index=True

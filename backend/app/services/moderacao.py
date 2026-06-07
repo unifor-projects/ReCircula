@@ -63,14 +63,21 @@ def resolver_denuncia_com_acao(
             delete_image_files(anuncio.imagens)
             db.delete(anuncio)
     elif acao == AcaoAdministrativa.suspender_usuario:
-        if not denuncia.usuario_denunciado_id:
+        usuario_id_a_suspender = denuncia.usuario_denunciado_id
+        if not usuario_id_a_suspender and denuncia.anuncio_id:
+            anuncio = db.get(Anuncio, denuncia.anuncio_id)
+            if anuncio:
+                usuario_id_a_suspender = anuncio.usuario_id
+        
+        if not usuario_id_a_suspender:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Denúncia não está vinculada a usuário",
+                detail="Denúncia não possui usuário associado para suspensão",
             )
-        usuario = db.get(Usuario, denuncia.usuario_denunciado_id)
+        usuario = db.get(Usuario, usuario_id_a_suspender)
         if usuario:
             usuario.is_active = False
+            usuario_afetado_id = usuario.id
 
     denuncia.status = StatusDenuncia.resolvida
     denuncia.admin_id = admin.id
