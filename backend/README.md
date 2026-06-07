@@ -112,3 +112,13 @@ Após iniciar o servidor, acesse:
 | RF05| Mensagens internas                     | `POST /mensagens/conversas`, `GET /mensagens/conversas` |
 | RF06| Gestão de status dos itens             | `PATCH /anuncios/{id}/status` |
 | RF07| Moderação e denúncias                  | `POST /denuncias`, `PATCH /admin/denuncias/{id}/resolver` (`/denuncias/{id}/resolver` legado/depreciado) |
+
+## Moderação
+
+para tornar alguem moderador você pode rodar o comando abaixo no terminal da sua máquina para atualizar o usuário pelo e-mail:
+
+```bash
+docker compose exec -T db psql -U postgres -d recircula_db -c "UPDATE usuarios SET is_admin = true WHERE email = 'SEU_EMAIL_AQUI';"
+```
+
+> **Nota**: Substitua 'SEU_EMAIL_AQUI' pelo e-mail que você usou para se cadastrar no site (ex: 'admin@example.com').
