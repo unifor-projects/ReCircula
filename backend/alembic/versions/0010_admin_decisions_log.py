@@ -18,7 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute(
-        "CREATE TYPE acao_administrativa AS ENUM ('ignorar', 'remover_anuncio', 'suspender_usuario')"
+        "CREATE TYPE IF NOT EXISTS acao_administrativa AS ENUM ('ignorar', 'remover_anuncio', 'suspender_usuario')"
     )
     op.create_table(
         "decisoes_administrativas",
