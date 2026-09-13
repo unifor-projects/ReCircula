@@ -120,11 +120,18 @@ export default function AnuncioDetailPage() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showLockerFlow, setShowLockerFlow] = useState(false);
+  const [lockerStep, setLockerStep] = useState<'aguardando_abertura' | 'aguardando_fechamento' | 'pronto_para_concluir'>(
+    'aguardando_abertura',
+  );
+  const [isConcludingLockerDonation, setIsConcludingLockerDonation] = useState(false);
+  const [lockerFeedback, setLockerFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const [isStartingChat, setIsStartingChat] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const isOwner = !!user && user.id === anuncio?.usuario_id;
+  const canUseLockerDonation = isOwner && !!anuncio && ['doacao', 'ambos'].includes(anuncio.tipo) && anuncio.status !== 'doado_trocado';
 
   useEffect(() => {
     if (Number.isNaN(anuncioId) || anuncioId <= 0) {
@@ -185,6 +192,30 @@ export default function AnuncioDetailPage() {
       router.push(`/chat?conv=${data.id}`);
     } catch {
       setIsStartingChat(false);
+    }
+  }
+
+  function handleStartLockerFlow() {
+    setShowLockerFlow(true);
+    setLockerStep('aguardando_abertura');
+    setLockerFeedback(null);
+  }
+
+  async function handleConcludeLockerDonation() {
+    if (!anuncio) return;
+    setIsConcludingLockerDonation(true);
+    setLockerFeedback(null);
+    try {
+      const { data } = await api.patch<Anuncio>(`/anuncios/${anuncioId}/status`, { status: 'doado_trocado' });
+      setAnuncio(data);
+      setNovoStatus(data.status);
+      setLockerFeedback({ ok: true, msg: 'Doação física concluída com sucesso.' });
+      setShowLockerFlow(false);
+      setLockerStep('aguardando_abertura');
+    } catch (error) {
+      setLockerFeedback({ ok: false, msg: getApiError(error) });
+    } finally {
+      setIsConcludingLockerDonation(false);
     }
   }
 
@@ -433,6 +464,76 @@ export default function AnuncioDetailPage() {
                     Editar anúncio
                   </Button>
                 </Link>
+
+                {canUseLockerDonation && (
+                  <div className="space-y-2 rounded-lg border border-green-200 bg-green-50 p-3">
+                    <h3 className="text-sm font-semibold text-green-800">Doação física via locker</h3>
+                    <p className="text-xs text-green-700">
+                      Use este fluxo apenas para itens publicados para doação. Siga os passos: abrir locker, guardar o item, fechar locker e concluir.
+                    </p>
+
+                    {!showLockerFlow ? (
+                      <Button type="button" className="w-full" onClick={handleStartLockerFlow}>
+                        Doar via locker
+                      </Button>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-green-800" aria-live="polite">
+                          {lockerStep === 'aguardando_abertura' && 'Passo 1: abra o locker para iniciar a entrega.'}
+                          {lockerStep === 'aguardando_fechamento' && 'Passo 2: coloque o item e feche o locker.'}
+                          {lockerStep === 'pronto_para_concluir' &&
+                            'Passo 3: confirme para concluir a doação na plataforma.'}
+                        </p>
+
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setLockerStep('aguardando_fechamento')}
+                            disabled={lockerStep !== 'aguardando_abertura'}
+                          >
+                            Abrir locker
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setLockerStep('pronto_para_concluir')}
+                            disabled={lockerStep !== 'aguardando_fechamento'}
+                          >
+                            Fechar locker
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Button
+                            type="button"
+                            onClick={() => void handleConcludeLockerDonation()}
+                            isLoading={isConcludingLockerDonation}
+                            disabled={lockerStep !== 'pronto_para_concluir'}
+                            className="flex-1"
+                          >
+                            Concluir doação
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => {
+                              setShowLockerFlow(false);
+                              setLockerStep('aguardando_abertura');
+                            }}
+                            className="flex-1"
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {lockerFeedback && (
+                  <p className={`text-xs ${lockerFeedback.ok ? 'text-green-600' : 'text-red-600'}`}>{lockerFeedback.msg}</p>
+                )}
 
                 {!showDeleteConfirm ? (
                   <button
