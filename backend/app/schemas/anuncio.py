@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.models.anuncio import TipoAnuncio, CondicaoItem, StatusAnuncio
 from app.schemas.categoria import CategoriaResponse
+from app.schemas.locker import LockerResponse
 from app.schemas.usuario import UsuarioPublico
 
 
@@ -25,6 +26,7 @@ class AnuncioCreate(BaseModel):
     categoria_id: Optional[int] = None
     localizacao: Optional[str] = Field(None, max_length=255)
     cep: Optional[str] = Field(None, max_length=9, pattern=r"^\d{5}-?\d{3}$")
+    locker_id: Optional[int] = None
 
 
 class AnuncioUpdate(BaseModel):
@@ -35,6 +37,7 @@ class AnuncioUpdate(BaseModel):
     categoria_id: Optional[int] = None
     localizacao: Optional[str] = Field(None, max_length=255)
     cep: Optional[str] = Field(None, max_length=9, pattern=r"^\d{5}-?\d{3}$")
+    locker_id: Optional[int] = None
 
 
 class AnuncioStatusUpdate(BaseModel):
@@ -63,10 +66,12 @@ class AnuncioResponse(BaseModel):
     longitude: Optional[float]
     usuario_id: int
     categoria_id: Optional[int]
+    locker_id: Optional[int]
     criado_em: datetime
     atualizado_em: datetime
     imagens: list[AnuncioImagemResponse]
     categoria: Optional[CategoriaResponse]
+    locker: Optional[LockerResponse]
     usuario: UsuarioPublico
 
     model_config = {"from_attributes": True}
@@ -85,6 +90,7 @@ class AnuncioListResponse(BaseModel):
     criado_em: datetime
     imagens: list[AnuncioImagemResponse]
     categoria: Optional[CategoriaResponse]
+    locker: Optional[LockerResponse]
     usuario: UsuarioPublico
 
     model_config = {"from_attributes": True}

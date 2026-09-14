@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.security import hash_password
 from app.database import SessionLocal
+from app.models.locker import Locker
 from app.models.usuario import Usuario
 
 DEFAULT_PASSWORD = "senha123"
@@ -23,6 +24,20 @@ SEED_USERS = [
     {"nome": "Alice Teste", "email": "alice@recircula.dev", "localizacao": "Fortaleza, CE"},
     {"nome": "Bruno Teste", "email": "bruno@recircula.dev", "localizacao": "Fortaleza, CE"},
 ]
+
+SEED_LOCKER = {
+    "unidade": "Unifor 01",
+    "codigo_unidade": "UNI01",
+    "numero": "1321",
+    "logradouro": "Av. Washington Soares",
+    "complemento": "Campus principal",
+    "bairro": "Edson Queiroz",
+    "cidade": "Fortaleza",
+    "estado": "CE",
+    "pais": "Brasil",
+    "cep": "60811-905",
+    "ativo": True,
+}
 
 
 def main() -> int:
@@ -50,6 +65,16 @@ def main() -> int:
             usuario.token_verificacao = None
 
             print(f"  {spec['email']} ({acao})")
+
+        locker = db.query(Locker).filter(Locker.codigo_unidade == SEED_LOCKER["codigo_unidade"]).first()
+        if locker is None:
+            locker = Locker(**SEED_LOCKER)
+            db.add(locker)
+            print(f"  Locker {SEED_LOCKER['codigo_unidade']} (criado)")
+        else:
+            for field, value in SEED_LOCKER.items():
+                setattr(locker, field, value)
+            print(f"  Locker {SEED_LOCKER['codigo_unidade']} (atualizado)")
 
         db.commit()
     except SQLAlchemyError as exc:

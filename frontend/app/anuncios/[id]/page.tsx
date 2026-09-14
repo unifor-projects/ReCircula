@@ -35,6 +35,20 @@ interface AnuncioCategoria {
   nome: string;
 }
 
+interface Locker {
+  id: number;
+  unidade: string;
+  codigo_unidade: string;
+  numero: string;
+  logradouro: string;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string;
+  estado: string | null;
+  pais: string;
+  cep: string;
+}
+
 interface Anuncio {
   id: number;
   titulo: string;
@@ -46,10 +60,12 @@ interface Anuncio {
   cep: string | null;
   usuario_id: number;
   categoria_id: number | null;
+  locker_id: number | null;
   criado_em: string;
   atualizado_em: string;
   imagens: AnuncioImagem[];
   categoria: AnuncioCategoria | null;
+  locker: Locker | null;
   usuario: AnuncioUsuario;
 }
 
@@ -125,13 +141,20 @@ export default function AnuncioDetailPage() {
     'aguardando_abertura',
   );
   const [isConcludingLockerDonation, setIsConcludingLockerDonation] = useState(false);
+  const [isOpeningLocker, setIsOpeningLocker] = useState(false);
+  const [isClosingLocker, setIsClosingLocker] = useState(false);
   const [lockerFeedback, setLockerFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const [isStartingChat, setIsStartingChat] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const isOwner = !!user && user.id === anuncio?.usuario_id;
-  const canUseLockerDonation = isOwner && !!anuncio && ['doacao', 'ambos'].includes(anuncio.tipo) && anuncio.status !== 'doado_trocado';
+  const canUseLockerDonation =
+    isOwner &&
+    !!anuncio &&
+    ['doacao', 'ambos'].includes(anuncio.tipo) &&
+    anuncio.status !== 'doado_trocado' &&
+    anuncio.locker_id !== null;
 
   useEffect(() => {
     if (Number.isNaN(anuncioId) || anuncioId <= 0) {
@@ -201,12 +224,34 @@ export default function AnuncioDetailPage() {
     setLockerFeedback(null);
   }
 
+  async function handleLockerAction(action: 'abrir' | 'fechar') {
+    if (!anuncio) return;
+    if (action === 'abrir') setIsOpeningLocker(true);
+    if (action === 'fechar') setIsClosingLocker(true);
+    setLockerFeedback(null);
+    try {
+      await api.post(`/anuncios/${anuncioId}/locker/${action}`);
+      if (action === 'abrir') {
+        setLockerStep('aguardando_fechamento');
+        setLockerFeedback({ ok: true, msg: 'Locker aberto com sucesso.' });
+      } else {
+        setLockerStep('pronto_para_concluir');
+        setLockerFeedback({ ok: true, msg: 'Locker fechado com sucesso.' });
+      }
+    } catch (error) {
+      setLockerFeedback({ ok: false, msg: getApiError(error) });
+    } finally {
+      if (action === 'abrir') setIsOpeningLocker(false);
+      if (action === 'fechar') setIsClosingLocker(false);
+    }
+  }
+
   async function handleConcludeLockerDonation() {
     if (!anuncio) return;
     setIsConcludingLockerDonation(true);
     setLockerFeedback(null);
     try {
-      const { data } = await api.patch<Anuncio>(`/anuncios/${anuncioId}/status`, { status: 'doado_trocado' });
+      const { data } = await api.post<Anuncio>(`/anuncios/${anuncioId}/locker/concluir`);
       setAnuncio(data);
       setNovoStatus(data.status);
       setLockerFeedback({ ok: true, msg: 'Doação física concluída com sucesso.' });
@@ -342,6 +387,15 @@ export default function AnuncioDetailPage() {
                   <div className="flex gap-2">
                     <dt className="w-24 flex-shrink-0 text-gray-500">CEP</dt>
                     <dd className="text-gray-900">{anuncio.cep}</dd>
+                  </div>
+                )}
+                {anuncio.locker && (
+                  <div className="flex gap-2">
+                    <dt className="w-24 flex-shrink-0 text-gray-500">Locker</dt>
+                    <dd className="text-gray-900">
+                      {anuncio.locker.unidade} ({anuncio.locker.codigo_unidade}) — {anuncio.locker.logradouro},{' '}
+                      {anuncio.locker.numero}, {anuncio.locker.cidade}
+                    </dd>
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -489,7 +543,8 @@ export default function AnuncioDetailPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setLockerStep('aguardando_fechamento')}
+                            onClick={() => void handleLockerAction('abrir')}
+                            isLoading={isOpeningLocker}
                             disabled={lockerStep !== 'aguardando_abertura'}
                           >
                             Abrir locker
@@ -497,7 +552,8 @@ export default function AnuncioDetailPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setLockerStep('pronto_para_concluir')}
+                            onClick={() => void handleLockerAction('fechar')}
+                            isLoading={isClosingLocker}
                             disabled={lockerStep !== 'aguardando_fechamento'}
                           >
                             Fechar locker

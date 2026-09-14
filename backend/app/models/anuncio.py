@@ -57,6 +57,9 @@ class Anuncio(Base):
     categoria_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("categorias.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    locker_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("lockers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False, index=True
     )
@@ -70,6 +73,7 @@ class Anuncio(Base):
     categoria: Mapped["Categoria"] = relationship(  # noqa: F821
         "Categoria", back_populates="anuncios"
     )
+    locker: Mapped["Locker | None"] = relationship("Locker", back_populates="anuncios")  # noqa: F821
     imagens: Mapped[list["AnuncioImagem"]] = relationship(
         "AnuncioImagem", back_populates="anuncio", cascade="all, delete-orphan"
     )
@@ -81,6 +85,9 @@ class Anuncio(Base):
     )
     denuncias: Mapped[list["Denuncia"]] = relationship(  # noqa: F821
         "Denuncia", back_populates="anuncio"
+    )
+    locker_eventos: Mapped[list["LockerEvento"]] = relationship(  # noqa: F821
+        "LockerEvento", back_populates="anuncio", cascade="all, delete-orphan"
     )
 
 
