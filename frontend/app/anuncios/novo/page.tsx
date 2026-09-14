@@ -26,6 +26,7 @@ const CONDICAO_OPTIONS = [
 
 const MAX_IMAGES = 3;
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif';
+const TEST_LOCKER_ID = '1';
 
 function formatCepInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
@@ -111,6 +112,7 @@ export default function NovoAnuncioPage() {
     if (categoriaId) fd.append('categoria_id', categoriaId);
     if (localizacao.trim()) fd.append('localizacao', localizacao.trim());
     if (cep.trim()) fd.append('cep', cep.trim());
+    fd.append('locker_id', TEST_LOCKER_ID);
     imagens.forEach((file) => fd.append('imagens', file));
 
     setIsSubmitting(true);

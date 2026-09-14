@@ -32,6 +32,7 @@ def create_tables():
     import app.models.denuncia  # noqa: F401
     import app.models.decisao_administrativa  # noqa: F401
     import app.models.chat  # noqa: F401
+    import app.models.locker  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     yield

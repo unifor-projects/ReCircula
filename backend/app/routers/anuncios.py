@@ -1,6 +1,7 @@
 from typing import List, Optional
 from uuid import uuid4
 import math
+import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
@@ -10,13 +11,16 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.usuario import Usuario
 from app.models.anuncio import Anuncio, AnuncioImagem, StatusHistorico, StatusAnuncio, TipoAnuncio, CondicaoItem
+from app.models.locker import Locker, LockerEvento, LockerEventoAcao
 from app.schemas.anuncio import (
     AnuncioResponse,
     AnuncioListResponse,
     AnuncioStatusUpdate,
     StatusHistoricoResponse,
 )
+from app.schemas.locker import LockerAcaoResponse
 from app.services.geocode import geocode_cep, haversine_km
+from app.services.locker_control import enviar_comando_abertura, enviar_comando_fechamento
 from app.services.uploads import ANUNCIO_IMAGES_DIR, delete_image_files
 
 router = APIRouter(prefix="/anuncios", tags=["Anúncios"])
@@ -33,6 +37,7 @@ _load_options = [
     selectinload(Anuncio.imagens),
     selectinload(Anuncio.categoria),
     selectinload(Anuncio.usuario),
+    selectinload(Anuncio.locker),
 ]
 
 
@@ -46,6 +51,60 @@ def _get_anuncio_or_404(anuncio_id: int, db: Session) -> Anuncio:
     if not anuncio:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anúncio não encontrado")
     return anuncio
+
+
+def _get_locker_or_400(locker_id: int, db: Session) -> Locker:
+    locker = db.query(Locker).filter(Locker.id == locker_id, Locker.ativo.is_(True)).first()
+    if locker is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Locker inválido ou inativo.")
+    return locker
+
+
+def _validar_autorizacao_fluxo_locker(anuncio: Anuncio, current_user: Usuario) -> None:
+    if anuncio.usuario_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+    if anuncio.tipo not in (TipoAnuncio.doacao, TipoAnuncio.ambos):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fluxo de locker disponível apenas para anúncios de doação.",
+        )
+    if anuncio.locker is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Anúncio não está associado a locker.",
+        )
+
+
+def _mock_resposta_gateway_locker(acao: LockerEventoAcao, locker: Locker, anuncio_id: int) -> dict:
+    return {
+        "mock": True,
+        "command_id": f"{acao.value}-{anuncio_id}-{locker.id}",
+        "locker_id": locker.id,
+        "codigo_unidade": locker.codigo_unidade,
+        "state": "accepted",
+    }
+
+
+def _registrar_evento_locker(
+    *,
+    db: Session,
+    anuncio: Anuncio,
+    acao: LockerEventoAcao,
+    sucesso: bool,
+    detalhe: str,
+) -> LockerEvento:
+    if anuncio.locker_id is None:
+        raise ValueError("Anúncio sem locker associado para registrar evento.")
+    evento = LockerEvento(
+        anuncio_id=anuncio.id,
+        locker_id=anuncio.locker_id,
+        acao=acao,
+        sucesso=sucesso,
+        detalhe=detalhe,
+    )
+    db.add(evento)
+    db.flush()
+    return evento
 
 
 def _save_image(file: UploadFile) -> tuple[str, str]:
@@ -181,6 +240,7 @@ async def criar_anuncio(
     categoria_id: Optional[int] = Form(None),
     localizacao: Optional[str] = Form(None, max_length=255),
     cep: Optional[str] = Form(None, max_length=9),
+    locker_id: Optional[int] = Form(None),
     imagens: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
@@ -194,6 +254,8 @@ async def criar_anuncio(
         )
 
     lat, lon = await geocode_cep(cep) if cep else (None, None)
+    if locker_id is not None:
+        _get_locker_or_400(locker_id, db)
 
     anuncio = Anuncio(
         titulo=titulo,
@@ -203,6 +265,7 @@ async def criar_anuncio(
         categoria_id=categoria_id,
         localizacao=localizacao,
         cep=cep,
+        locker_id=locker_id,
         latitude=lat,
         longitude=lon,
         usuario_id=current_user.id,
@@ -229,6 +292,7 @@ async def atualizar_anuncio(
     categoria_id: Optional[int] = Form(None),
     localizacao: Optional[str] = Form(None, max_length=255),
     cep: Optional[str] = Form(None, max_length=9),
+    locker_id: Optional[int] = Form(None),
     imagens: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
@@ -250,7 +314,10 @@ async def atualizar_anuncio(
         "categoria_id": categoria_id,
         "localizacao": localizacao,
         "cep": cep,
+        "locker_id": locker_id,
     }
+    if locker_id is not None:
+        _get_locker_or_400(locker_id, db)
     for field, value in fields.items():
         if value is not None:
             setattr(anuncio, field, value)
@@ -301,6 +368,182 @@ def alterar_status(
     )
     anuncio.status = dados.status
     db.add(historico)
+    db.commit()
+    return _get_anuncio_or_404(anuncio_id, db)
+
+
+@router.post("/{anuncio_id}/locker/abrir", response_model=LockerAcaoResponse, summary="Solicitar abertura do locker")
+def abrir_locker(
+    anuncio_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    anuncio = _get_anuncio_or_404(anuncio_id, db)
+    _validar_autorizacao_fluxo_locker(anuncio, current_user)
+    locker = anuncio.locker
+    if locker is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio não está associado a locker.")
+    if anuncio.status == StatusAnuncio.doado_trocado:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio já concluído.")
+
+    try:
+        enviar_comando_abertura(locker, anuncio.id)
+    except NotImplementedError:
+        gateway = _mock_resposta_gateway_locker(LockerEventoAcao.abrir, locker, anuncio.id)
+    except Exception:
+        _registrar_evento_locker(
+            db=db,
+            anuncio=anuncio,
+            acao=LockerEventoAcao.abrir,
+            sucesso=False,
+            detalhe="Falha ao solicitar abertura no gateway.",
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível solicitar abertura do locker.",
+        ) from None
+
+    if not gateway.get("command_id") or not gateway.get("state"):
+        _registrar_evento_locker(
+            db=db,
+            anuncio=anuncio,
+            acao=LockerEventoAcao.abrir,
+            sucesso=False,
+            detalhe="Resposta inválida do gateway.",
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Resposta inválida do gateway do locker.",
+        )
+
+    evento = _registrar_evento_locker(
+        db=db,
+        anuncio=anuncio,
+        acao=LockerEventoAcao.abrir,
+        sucesso=True,
+        detalhe=json.dumps(gateway, ensure_ascii=False),
+    )
+    db.commit()
+    return LockerAcaoResponse(
+        evento_id=evento.id,
+        acao=LockerEventoAcao.abrir.value,
+        sucesso=True,
+        detalhe="Locker autorizado para abertura.",
+        gateway=gateway,
+    )
+
+
+@router.post("/{anuncio_id}/locker/fechar", response_model=LockerAcaoResponse, summary="Solicitar fechamento do locker")
+def fechar_locker(
+    anuncio_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    anuncio = _get_anuncio_or_404(anuncio_id, db)
+    _validar_autorizacao_fluxo_locker(anuncio, current_user)
+    locker = anuncio.locker
+    if locker is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio não está associado a locker.")
+    if anuncio.status == StatusAnuncio.doado_trocado:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio já concluído.")
+
+    try:
+        enviar_comando_fechamento(locker, anuncio.id)
+    except NotImplementedError:
+        gateway = _mock_resposta_gateway_locker(LockerEventoAcao.fechar, locker, anuncio.id)
+    except Exception:
+        _registrar_evento_locker(
+            db=db,
+            anuncio=anuncio,
+            acao=LockerEventoAcao.fechar,
+            sucesso=False,
+            detalhe="Falha ao solicitar fechamento no gateway.",
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível solicitar fechamento do locker.",
+        ) from None
+
+    if not gateway.get("command_id") or not gateway.get("state"):
+        _registrar_evento_locker(
+            db=db,
+            anuncio=anuncio,
+            acao=LockerEventoAcao.fechar,
+            sucesso=False,
+            detalhe="Resposta inválida do gateway.",
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Resposta inválida do gateway do locker.",
+        )
+
+    evento = _registrar_evento_locker(
+        db=db,
+        anuncio=anuncio,
+        acao=LockerEventoAcao.fechar,
+        sucesso=True,
+        detalhe=json.dumps(gateway, ensure_ascii=False),
+    )
+    db.commit()
+    return LockerAcaoResponse(
+        evento_id=evento.id,
+        acao=LockerEventoAcao.fechar.value,
+        sucesso=True,
+        detalhe="Locker autorizado para fechamento.",
+        gateway=gateway,
+    )
+
+
+@router.post(
+    "/{anuncio_id}/locker/concluir",
+    response_model=AnuncioResponse,
+    summary="Concluir doação física via locker",
+)
+def concluir_doacao_via_locker(
+    anuncio_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    anuncio = _get_anuncio_or_404(anuncio_id, db)
+    _validar_autorizacao_fluxo_locker(anuncio, current_user)
+    if anuncio.status == StatusAnuncio.doado_trocado:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio já concluído.")
+
+    evento_fechamento = (
+        db.query(LockerEvento)
+        .filter(
+            LockerEvento.anuncio_id == anuncio.id,
+            LockerEvento.acao == LockerEventoAcao.fechar,
+            LockerEvento.sucesso.is_(True),
+        )
+        .order_by(LockerEvento.criado_em.desc())
+        .first()
+    )
+    if evento_fechamento is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="É necessário fechar o locker antes de concluir a doação.",
+        )
+
+    db.add(
+        StatusHistorico(
+            anuncio_id=anuncio_id,
+            status_anterior=anuncio.status,
+            status_novo=StatusAnuncio.doado_trocado,
+        )
+    )
+    anuncio.status = StatusAnuncio.doado_trocado
+    _registrar_evento_locker(
+        db=db,
+        anuncio=anuncio,
+        acao=LockerEventoAcao.concluir_doacao,
+        sucesso=True,
+        detalhe="Doação concluída após confirmação de fechamento.",
+    )
     db.commit()
     return _get_anuncio_or_404(anuncio_id, db)
 
