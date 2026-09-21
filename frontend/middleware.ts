@@ -3,7 +3,7 @@ import type { JWTPayload } from 'jose';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/perfil', '/anuncios'];
+const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/perfil', '/anuncios', '/offline'];
 const SESSION_COOKIE_NAME = process.env.NEXT_SERVER_SESSION_COOKIE_NAME ?? 'rc_session';
 const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY;
 
@@ -48,5 +48,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/).*)',
+  ],
 };
