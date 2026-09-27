@@ -1,7 +1,7 @@
 'use client';
 
 import { AxiosError } from 'axios';
-import { MessageCircle, Flag } from 'lucide-react';
+import { Bluetooth, MessageCircle, Flag } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -527,9 +527,18 @@ export default function AnuncioDetailPage() {
                     </p>
 
                     {!showLockerFlow ? (
-                      <Button type="button" className="w-full" onClick={handleStartLockerFlow}>
-                        Doar via locker
-                      </Button>
+                      <div className="flex flex-col gap-2">
+                        <Button type="button" className="w-full" onClick={handleStartLockerFlow}>
+                          Doar via locker
+                        </Button>
+                        <Link
+                          href={`/locker/bluetooth?anuncioId=${anuncioId}`}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-green-300 px-4 py-2.5 text-sm font-medium text-green-700 transition hover:bg-green-100"
+                        >
+                          <Bluetooth size={15} />
+                          Controlar via Bluetooth
+                        </Link>
+                      </div>
                     ) : (
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-green-800" aria-live="polite">
