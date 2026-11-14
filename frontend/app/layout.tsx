@@ -42,7 +42,7 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body className={`${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
         <PwaRegister />
         <Providers>{children}</Providers>

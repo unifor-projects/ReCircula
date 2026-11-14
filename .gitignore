@@ -48,3 +48,12 @@ frontend/.env*.local
 
 # Backend uploads
 backend/uploads/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# Ferramentas locais de IA (skills, plugins, configurações pessoais)
+.agents/
+.claude/
+skills-lock.json
+DESIGN.md
+.playwright/

@@ -103,11 +103,24 @@ function BLEControlInner() {
           <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
             <div className="text-sm">
-              <p className="font-semibold text-amber-800">Navegador não suportado</p>
-              <p className="mt-0.5 text-amber-700">
-                A Web Bluetooth API requer <strong>Chrome</strong> ou <strong>Edge</strong> em
-                desktop. Outros navegadores (Firefox, Safari) não têm suporte.
-              </p>
+              {typeof window !== 'undefined' && !window.isSecureContext ? (
+                <>
+                  {/* Web Bluetooth só existe em HTTPS ou localhost; por http://IP o Chrome esconde a API */}
+                  <p className="font-semibold text-amber-800">Conexão não segura</p>
+                  <p className="mt-0.5 text-amber-700">
+                    O Bluetooth só funciona em páginas <strong>HTTPS</strong> ou em <strong>localhost</strong>. Você
+                    abriu por <strong>{window.location.origin}</strong>.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-amber-800">Navegador não suportado</p>
+                  <p className="mt-0.5 text-amber-700">
+                    Use <strong>Chrome</strong> ou <strong>Edge</strong> no computador ou no Android. Firefox, Safari e
+                    qualquer navegador de iPhone não têm Web Bluetooth.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}

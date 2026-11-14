@@ -57,14 +57,15 @@ export default function ConversationList({
   }, [conversations, search, currentUserId]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-white">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h2 className="text-lg font-semibold text-gray-800">Conversas</h2>
+        <h2 className="text-lg font-bold text-gray-900">Conversas</h2>
         <button
           type="button"
           onClick={onNewConversation}
-          className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-green-700 transition-colors hover:bg-green-50"
           title="Nova conversa"
+          aria-label="Nova conversa"
         >
           <MessageSquarePlus size={20} />
         </button>
@@ -72,45 +73,50 @@ export default function ConversationList({
 
       <div className="px-3 py-2">
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar conversa..."
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition-colors focus:border-green-300 focus:bg-white"
+            placeholder="Buscar conversa…"
+            aria-label="Buscar conversa"
+            className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-500 outline-none transition-colors focus:border-green-500 focus:bg-white"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-gray-400">Nenhuma conversa encontrada</p>
+          <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma conversa encontrada</p>
         ) : (
           filtered.map((conv) => {
             const other = conv.participants.find((p) => p.user_id !== currentUserId);
             const name = other?.user.nome ?? 'Usuário';
             const isOnline = other ? onlineUsers.has(other.user_id) : false;
             const isActive = conv.id === activeId;
+            const hasUnread = conv.unread_count > 0;
 
             return (
               <button
                 key={conv.id}
                 type="button"
                 onClick={() => onSelect(conv.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 ${
-                  isActive ? 'bg-green-50' : ''
+                aria-current={isActive ? 'true' : undefined}
+                className={`flex w-full items-center gap-3 border-l-4 px-3 py-3 text-left transition-colors ${
+                  isActive ? 'border-green-600 bg-green-50' : 'border-transparent hover:bg-gray-50'
                 }`}
               >
                 <div className="relative flex-shrink-0">
                   {other?.user.foto_url ? (
                     <img
                       src={other.user.foto_url}
-                      alt={name}
-                      className="h-10 w-10 rounded-full object-cover"
+                      alt=""
+                      width={44}
+                      height={44}
+                      className="h-11 w-11 rounded-full object-cover"
                     />
                   ) : (
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">
                       {getInitials(name)}
                     </span>
                   )}
@@ -121,21 +127,21 @@ export default function ConversationList({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
-                    <span className="truncate text-sm font-medium text-gray-800">{name}</span>
+                    <span className={`truncate text-sm text-gray-900 ${hasUnread ? 'font-bold' : 'font-medium'}`}>{name}</span>
                     {conv.last_message && (
-                      <span className="flex-shrink-0 text-xs text-gray-400">
+                      <span className={`flex-shrink-0 text-xs tabular-nums ${hasUnread ? 'font-semibold text-green-700' : 'text-gray-500'}`}>
                         {formatTime(conv.last_message.created_at)}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center justify-between">
-                    <p className="truncate text-xs text-gray-500">
+                    <p className={`truncate text-xs ${hasUnread ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
                       {conv.last_message
-                        ? conv.last_message.content.slice(0, 50)
+                        ? `${conv.last_message.sender_id === currentUserId ? 'Você: ' : ''}${conv.last_message.content.slice(0, 50)}`
                         : 'Nenhuma mensagem'}
                     </p>
                     {conv.unread_count > 0 && (
-                      <span className="ml-2 flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-green-500 px-1.5 text-xs font-medium text-white">
+                      <span className="ml-2 flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-green-600 px-1.5 text-xs font-semibold text-white">
                         {conv.unread_count > 99 ? '99+' : conv.unread_count}
                       </span>
                     )}

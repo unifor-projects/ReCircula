@@ -91,19 +91,22 @@ export default function Navbar() {
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4">
-        <Link
-          href="/anuncios"
-          onClick={closeMobileMenu}
-          className="text-xl font-bold text-green-600 transition-colors hover:text-green-700"
-        >
-          ReCircula
-        </Link>
+        <div className="flex items-center gap-8">
+          <Link
+            href="/"
+            onClick={closeMobileMenu}
+            translate="no"
+            className="font-mono text-xl font-bold text-green-600 transition-colors hover:text-green-700"
+          >
+            ReCircula
+          </Link>
 
-        {/* Desktop links */}
-        <div className="hidden items-center gap-6 md:flex">
-          {navLinks.map((link) => (
-            <NavLink key={link.href} href={link.href} label={link.label} pathname={pathname} />
-          ))}
+          {/* Desktop links, junto do logo */}
+          <div className="hidden items-center gap-6 md:flex">
+            {navLinks.map((link) => (
+              <NavLink key={link.href} href={link.href} label={link.label} pathname={pathname} />
+            ))}
+          </div>
         </div>
 
         {/* Desktop auth */}

@@ -18,6 +18,13 @@ interface AuthContextType {
   login: (accessToken: string, refreshToken: string, user: User) => void;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  /** false até a sessão salva no navegador ser restaurada; antes disso não redirecione. */
+  isReady: boolean;
+}
+
+/** Página de login que volta para `next` depois de entrar. */
+export function loginUrl(next: string): string {
+  return `/login?next=${encodeURIComponent(next)}`;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -56,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   const clearAuthStorage = useCallback(() => {
     setToken(null);
@@ -94,9 +102,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         clearAuthStorage();
       }
-      return;
+    } else {
+      clearAuthStorage();
     }
-    clearAuthStorage();
+    setIsReady(true);
   }, [clearAuthStorage]);
 
   const refreshAccessToken = useCallback(async () => {
@@ -159,11 +168,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     clearAuthStorage();
-    router.replace('/login');
+    router.replace('/');
   }, [clearAuthStorage, refreshToken, router]);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token, isReady }}>
       {children}
     </AuthContext.Provider>
   );

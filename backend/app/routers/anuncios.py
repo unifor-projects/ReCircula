@@ -38,6 +38,7 @@ _load_options = [
     selectinload(Anuncio.categoria),
     selectinload(Anuncio.usuario),
     selectinload(Anuncio.locker),
+    selectinload(Anuncio.locker_eventos),
 ]
 
 
@@ -60,8 +61,9 @@ def _get_locker_or_400(locker_id: int, db: Session) -> Locker:
     return locker
 
 
-def _validar_autorizacao_fluxo_locker(anuncio: Anuncio, current_user: Usuario) -> None:
-    if anuncio.usuario_id != current_user.id and not current_user.is_admin:
+def _validar_autorizacao_fluxo_locker(anuncio: Anuncio, current_user: Usuario, somente_dono: bool = True) -> None:
+    # Abrir/fechar: qualquer usuário logado (quem recebe a doação retira o item). Concluir: só o dono.
+    if somente_dono and anuncio.usuario_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
     if anuncio.tipo not in (TipoAnuncio.doacao, TipoAnuncio.ambos):
         raise HTTPException(
@@ -73,16 +75,6 @@ def _validar_autorizacao_fluxo_locker(anuncio: Anuncio, current_user: Usuario) -
             status_code=status.HTTP_409_CONFLICT,
             detail="Anúncio não está associado a locker.",
         )
-
-
-def _mock_resposta_gateway_locker(acao: LockerEventoAcao, locker: Locker, anuncio_id: int) -> dict:
-    return {
-        "mock": True,
-        "command_id": f"{acao.value}-{anuncio_id}-{locker.id}",
-        "locker_id": locker.id,
-        "codigo_unidade": locker.codigo_unidade,
-        "state": "accepted",
-    }
 
 
 def _registrar_evento_locker(
@@ -138,7 +130,7 @@ async def listar_anuncios(
     tipo: Optional[str] = Query(None, description="doacao | troca"),
     cep: Optional[str] = Query(None, description="Filtrar por CEP"),
     raio_km: Optional[float] = Query(None, ge=0.1, le=500, description="Raio de busca em km (requer cep com coordenadas)"),
-    status: Optional[str] = Query(None, description="disponivel | reservado | doado_trocado"),
+    status: Optional[str] = Query(None, description="disponivel | reservado | doado_trocado | doado_no_locker"),
     ordenar: Optional[str] = Query("recente", description="recente | antigo | proximo"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -146,7 +138,7 @@ async def listar_anuncios(
 ):
     """
     Lista anúncios com suporte a busca por palavra-chave, filtragem por categoria,
-    tipo, CEP e status. Anúncios concluídos são ocultados por padrão (RF04, RF06.2).
+    tipo, CEP e status. Concluídos ficam ocultos por padrão, exceto os doados no locker, que vêm depois dos ativos (RF04, RF06.2).
 
     Parâmetros de geolocalização (RF04.3, RF04.4, RNF03):
     - ``cep``: CEP de referência para filtro por proximidade (com ou sem hífen).
@@ -156,10 +148,23 @@ async def listar_anuncios(
     """
     query = db.query(Anuncio).options(*_load_options)
 
-    if status:
+    doado_no_locker = (
+        db.query(LockerEvento.id)
+        .filter(
+            LockerEvento.anuncio_id == Anuncio.id,
+            LockerEvento.acao == LockerEventoAcao.concluir_doacao,
+            LockerEvento.sucesso.is_(True),
+        )
+        .exists()
+    )
+    if status == "doado_no_locker":
+        query = query.filter(Anuncio.status == StatusAnuncio.doado_trocado, doado_no_locker)
+    elif status:
         query = query.filter(Anuncio.status == status)
     else:
-        query = query.filter(Anuncio.status != StatusAnuncio.doado_trocado)
+        # Concluídos ficam ocultos, exceto os doados no locker
+        query = query.filter(or_(Anuncio.status != StatusAnuncio.doado_trocado, doado_no_locker))
+    concluido = Anuncio.status == StatusAnuncio.doado_trocado
 
     if q:
         query = query.filter(
@@ -209,18 +214,21 @@ async def listar_anuncios(
             query = query.filter(Anuncio.cep.ilike(f"{cep_digits[:5]}%"))
 
     if ordenar == "antigo":
-        query = query.order_by(Anuncio.criado_em.asc())
+        query = query.order_by(concluido, Anuncio.criado_em.asc())
     elif ordenar == "proximo" and ref_lat is not None and ref_lon is not None:
         # Ordenação por proximidade: busca todos os candidatos e ordena em memória
         candidates = query.all()
         candidates.sort(
-            key=lambda a: haversine_km(ref_lat, ref_lon, a.latitude, a.longitude)
-            if a.latitude is not None and a.longitude is not None
-            else float("inf")
+            key=lambda a: (
+                a.status == StatusAnuncio.doado_trocado,
+                haversine_km(ref_lat, ref_lon, a.latitude, a.longitude)
+                if a.latitude is not None and a.longitude is not None
+                else float("inf"),
+            )
         )
         return candidates[offset: offset + limit]
     else:
-        query = query.order_by(Anuncio.criado_em.desc())
+        query = query.order_by(concluido, Anuncio.criado_em.desc())
 
     return query.offset(offset).limit(limit).all()
 
@@ -379,17 +387,13 @@ def abrir_locker(
     current_user: Usuario = Depends(get_current_user),
 ):
     anuncio = _get_anuncio_or_404(anuncio_id, db)
-    _validar_autorizacao_fluxo_locker(anuncio, current_user)
+    _validar_autorizacao_fluxo_locker(anuncio, current_user, somente_dono=False)
     locker = anuncio.locker
     if locker is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio não está associado a locker.")
-    if anuncio.status == StatusAnuncio.doado_trocado:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio já concluído.")
 
     try:
-        enviar_comando_abertura(locker, anuncio.id)
-    except NotImplementedError:
-        gateway = _mock_resposta_gateway_locker(LockerEventoAcao.abrir, locker, anuncio.id)
+        gateway = enviar_comando_abertura(locker, anuncio.id)
     except Exception:
         _registrar_evento_locker(
             db=db,
@@ -423,7 +427,7 @@ def abrir_locker(
         anuncio=anuncio,
         acao=LockerEventoAcao.abrir,
         sucesso=True,
-        detalhe=json.dumps(gateway, ensure_ascii=False),
+        detalhe=json.dumps({**gateway, "usuario_id": current_user.id}, ensure_ascii=False),
     )
     db.commit()
     return LockerAcaoResponse(
@@ -442,17 +446,13 @@ def fechar_locker(
     current_user: Usuario = Depends(get_current_user),
 ):
     anuncio = _get_anuncio_or_404(anuncio_id, db)
-    _validar_autorizacao_fluxo_locker(anuncio, current_user)
+    _validar_autorizacao_fluxo_locker(anuncio, current_user, somente_dono=False)
     locker = anuncio.locker
     if locker is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio não está associado a locker.")
-    if anuncio.status == StatusAnuncio.doado_trocado:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anúncio já concluído.")
 
     try:
-        enviar_comando_fechamento(locker, anuncio.id)
-    except NotImplementedError:
-        gateway = _mock_resposta_gateway_locker(LockerEventoAcao.fechar, locker, anuncio.id)
+        gateway = enviar_comando_fechamento(locker, anuncio.id)
     except Exception:
         _registrar_evento_locker(
             db=db,
@@ -486,7 +486,7 @@ def fechar_locker(
         anuncio=anuncio,
         acao=LockerEventoAcao.fechar,
         sucesso=True,
-        detalhe=json.dumps(gateway, ensure_ascii=False),
+        detalhe=json.dumps({**gateway, "usuario_id": current_user.id}, ensure_ascii=False),
     )
     db.commit()
     return LockerAcaoResponse(

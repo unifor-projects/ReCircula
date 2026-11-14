@@ -1,8 +1,14 @@
 import axios from 'axios';
 
+// Em dev, sem NEXT_PUBLIC_API_URL, o backend é o mesmo host que serviu a página na porta 8000:
+// funciona em localhost e pelo IP da rede (celular) sem editar o .env a cada troca de Wi-Fi.
+function devBaseURL(): string {
+  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  return `http://${host}:8000`;
+}
+
 const baseURL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (process.env.NODE_ENV !== 'production' ? 'http://localhost:8000' : undefined);
+  process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV !== 'production' ? devBaseURL() : undefined);
 
 // Only throw at runtime in the browser, never during SSR / static pre-rendering.
 // The env var must be set when deploying to production.

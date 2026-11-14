@@ -1,12 +1,14 @@
 'use client';
 
 import { AxiosError } from 'axios';
-import { Bluetooth, MessageCircle, Flag } from 'lucide-react';
+import { MessageCircle, Flag } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Button from '@/components/Button';
-import { useAuth } from '@/contexts/AuthContext';
+import DoadoLockerBadge from '@/components/DoadoLockerBadge';
+import LockerControles from '@/components/LockerControles';
+import { loginUrl, useAuth } from '@/contexts/AuthContext';
 import api, { API_BASE_URL } from '@/services/api';
 import type { ChatConversation } from '@/types/chat';
 import ReportModal from '@/components/ReportModal';
@@ -67,6 +69,7 @@ interface Anuncio {
   categoria: AnuncioCategoria | null;
   locker: Locker | null;
   usuario: AnuncioUsuario;
+  doado_via_locker: boolean;
 }
 
 const TIPO_LABEL: Record<string, string> = { doacao: 'Doação', troca: 'Troca', ambos: 'Doação e Troca' };
@@ -212,7 +215,7 @@ export default function AnuncioDetailPage() {
       const { data } = await api.post<ChatConversation>('/api/chat/conversations', {
         user_id: anuncio.usuario.id,
       });
-      router.push(`/chat?conv=${data.id}`);
+      router.push(`/chat?conv=${data.id}&anuncio=${anuncioId}`);
     } catch {
       setIsStartingChat(false);
     }
@@ -357,11 +360,15 @@ export default function AnuncioDetailPage() {
                 >
                   {TIPO_LABEL[anuncio.tipo] ?? anuncio.tipo}
                 </span>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[anuncio.status] ?? 'bg-gray-100 text-gray-600'}`}
-                >
-                  {STATUS_LABEL[anuncio.status] ?? anuncio.status}
-                </span>
+                {anuncio.doado_via_locker ? (
+                  <DoadoLockerBadge />
+                ) : (
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[anuncio.status] ?? 'bg-gray-100 text-gray-600'}`}
+                  >
+                    {STATUS_LABEL[anuncio.status] ?? anuncio.status}
+                  </span>
+                )}
               </div>
 
               <h1 className="mt-3 text-xl font-bold text-gray-900">{anuncio.titulo}</h1>
@@ -445,7 +452,7 @@ export default function AnuncioDetailPage() {
 
               {!isOwner && !user && (
                 <Link
-                  href="/login"
+                  href={loginUrl(`/anuncios/${anuncioId}`)}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-green-600 px-4 py-2.5 text-sm font-medium text-green-600 transition hover:bg-green-50"
                 >
                   <MessageCircle size={16} />
@@ -453,12 +460,22 @@ export default function AnuncioDetailPage() {
                 </Link>
               )}
 
+              {/* Quem vai receber a doação também abre o locker (comando vai pelo backend, ESP32 no Wi-Fi) */}
+              {!isOwner && anuncio.locker_id !== null && ['doacao', 'ambos'].includes(anuncio.tipo) && (
+                <div className="mt-2 space-y-2">
+                  {anuncio.doado_via_locker && (
+                    <p className="text-sm font-medium text-green-800">O item está no locker. Abra para retirar.</p>
+                  )}
+                  <LockerControles anuncioId={anuncioId} />
+                </div>
+              )}
+
               {!isOwner && (
                 <button
                   type="button"
                   onClick={() => {
                     if (!user) {
-                      router.push('/login');
+                      router.push(loginUrl(`/anuncios/${anuncioId}`));
                     } else {
                       setIsReportModalOpen(true);
                     }
@@ -527,18 +544,9 @@ export default function AnuncioDetailPage() {
                     </p>
 
                     {!showLockerFlow ? (
-                      <div className="flex flex-col gap-2">
-                        <Button type="button" className="w-full" onClick={handleStartLockerFlow}>
-                          Doar via locker
-                        </Button>
-                        <Link
-                          href={`/locker/bluetooth?anuncioId=${anuncioId}`}
-                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-green-300 px-4 py-2.5 text-sm font-medium text-green-700 transition hover:bg-green-100"
-                        >
-                          <Bluetooth size={15} />
-                          Controlar via Bluetooth
-                        </Link>
-                      </div>
+                      <Button type="button" className="w-full" onClick={handleStartLockerFlow}>
+                        Doar via locker
+                      </Button>
                     ) : (
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-green-800" aria-live="polite">
@@ -593,6 +601,17 @@ export default function AnuncioDetailPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {isOwner && anuncio.locker_id !== null && (
+                  <div className="space-y-2">
+                    {anuncio.doado_via_locker && (
+                      <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+                        Item doado no locker. Você ainda pode abrir o locker se precisar.
+                      </p>
+                    )}
+                    <LockerControles anuncioId={anuncioId} />
                   </div>
                 )}
 

@@ -4,7 +4,7 @@ import { AxiosError } from 'axios';
 import { useParams, useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import Button from '@/components/Button';
-import { useAuth } from '@/contexts/AuthContext';
+import { loginUrl, useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 import { motion } from 'framer-motion';
 import { Flag } from 'lucide-react';
@@ -308,7 +308,7 @@ export default function PerfilPage() {
                 type="button"
                 onClick={() => {
                   if (!user) {
-                    router.push('/login');
+                    router.push(loginUrl(window.location.pathname));
                   } else {
                     setIsReportModalOpen(true);
                   }

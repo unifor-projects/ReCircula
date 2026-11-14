@@ -73,6 +73,7 @@ class AnuncioResponse(BaseModel):
     categoria: Optional[CategoriaResponse]
     locker: Optional[LockerResponse]
     usuario: UsuarioPublico
+    doado_via_locker: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -92,5 +93,6 @@ class AnuncioListResponse(BaseModel):
     categoria: Optional[CategoriaResponse]
     locker: Optional[LockerResponse]
     usuario: UsuarioPublico
+    doado_via_locker: bool = False
 
     model_config = {"from_attributes": True}

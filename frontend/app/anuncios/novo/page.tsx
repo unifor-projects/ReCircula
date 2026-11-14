@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import Button from '@/components/Button';
-import { useAuth } from '@/contexts/AuthContext';
+import { loginUrl, useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 
 interface Categoria {
@@ -48,7 +48,7 @@ function getApiError(error: unknown): string {
 
 export default function NovoAnuncioPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isReady } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -66,15 +66,16 @@ export default function NovoAnuncioPage() {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
+    if (!isReady) return;
     if (!isAuthenticated) {
-      router.replace('/login');
+      router.replace(loginUrl('/anuncios/novo'));
       return;
     }
     api
       .get<Categoria[]>('/categorias/')
       .then(({ data }) => setCategorias(data))
       .catch(() => {});
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isReady, router]);
 
   useEffect(() => {
     const urls = imagens.map((f) => URL.createObjectURL(f));

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import auth, usuarios, anuncios, categorias, mensagens, denuncias, admin, chat
+from app.routers import auth, usuarios, anuncios, categorias, mensagens, denuncias, admin, chat, lockers
 
 app = FastAPI(
     title="Plataforma de Doação e Troca – API",
@@ -40,6 +40,7 @@ app.include_router(mensagens.router)
 app.include_router(denuncias.router)
 app.include_router(admin.router)
 app.include_router(chat.router)
+app.include_router(lockers.router)
 
 
 @app.get("/", tags=["Health"], summary="Health check")
