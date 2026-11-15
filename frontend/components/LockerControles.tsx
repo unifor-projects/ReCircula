@@ -7,8 +7,13 @@ import { useState } from 'react';
 import { loginUrl, useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 
+// Caminho Wi-Fi desativado: o controle do locker é feito via Bluetooth (BLE).
+// Para reativar, mude para true.
+const WIFI_ENABLED = false;
+
 /** Abre/fecha o locker pelo backend; o ESP32 recebe o comando pelo Wi-Fi. */
 export default function LockerControles({ anuncioId }: { anuncioId: number }) {
+  if (!WIFI_ENABLED) return null;
   const { isAuthenticated } = useAuth();
   const [enviando, setEnviando] = useState<'abrir' | 'fechar' | null>(null);
   const [retorno, setRetorno] = useState<{ ok: boolean; msg: string } | null>(null);

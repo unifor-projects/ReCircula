@@ -562,7 +562,7 @@ export default function AnuncioDetailPage() {
                             variant="outline"
                             onClick={() => void handleLockerAction('abrir')}
                             isLoading={isOpeningLocker}
-                            disabled={lockerStep !== 'aguardando_abertura'}
+                            disabled={isOpeningLocker || isClosingLocker}
                           >
                             Abrir locker
                           </Button>
@@ -571,7 +571,7 @@ export default function AnuncioDetailPage() {
                             variant="outline"
                             onClick={() => void handleLockerAction('fechar')}
                             isLoading={isClosingLocker}
-                            disabled={lockerStep !== 'aguardando_fechamento'}
+                            disabled={lockerStep === 'aguardando_abertura' || isOpeningLocker || isClosingLocker}
                           >
                             Fechar locker
                           </Button>

@@ -212,6 +212,7 @@ function BLEControlInner() {
             </button>
           </div>
 
+
           {!isConnected && (
             <p className="mt-3 text-center text-xs text-gray-400">
               Conecte ao locker para habilitar os controles.

@@ -7,15 +7,15 @@ import { useCallback, useRef, useState } from 'react';
  * O firmware do ESP32 deve anunciar o mesmo SERVICE_UUID e expor uma
  * característica gravável com CHARACTERISTIC_UUID.
  *
- * Comandos:
- *   0x01 → abrir (destrancar a trava)
- *   0x00 → fechar (trancar a trava)
+ * Comandos (strings UTF-8 via TextEncoder, igual ao index.html do firmware):
+ *   "ABRIR"  → destrancar a trava
+ *   "FECHAR" → trancar a trava
  */
 export const LOCKER_SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 export const LOCKER_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+export const LOCKER_DEVICE_NAME = 'ESP32-MOTOR';
 
-const CMD_ABRIR = 0x01;
-const CMD_FECHAR = 0x00;
+const encoder = new TextEncoder();
 
 export type BLEStatus = 'desconectado' | 'conectando' | 'conectado' | 'erro';
 
@@ -58,7 +58,7 @@ export function useLockerBLE() {
 
     try {
       const device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [LOCKER_SERVICE_UUID] }],
+        filters: [{ name: LOCKER_DEVICE_NAME, services: [LOCKER_SERVICE_UUID] }],
       });
 
       device.addEventListener('gattserverdisconnected', () => {
@@ -120,8 +120,8 @@ export function useLockerBLE() {
 
       setIsSending(true);
       try {
-        const byte = comando === 'abrir' ? CMD_ABRIR : CMD_FECHAR;
-        await charRef.current.writeValue(new Uint8Array([byte]));
+        const cmdStr = comando === 'abrir' ? 'ABRIR' : 'FECHAR';
+        await charRef.current.writeValue(encoder.encode(cmdStr));
         const label = comando === 'abrir' ? 'Abrir' : 'Fechar';
         addLog(`Comando "${label}" enviado com sucesso.`, 'success');
         return true;
