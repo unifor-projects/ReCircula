@@ -14,9 +14,7 @@ const MIN_PASSWORD_LENGTH = 6;
 function Requisito({ ok, children }: { ok: boolean; children: string }) {
   return (
     <li className={`flex items-center gap-1.5 transition-colors ${ok ? 'text-green-700' : 'text-gray-500'}`}>
-      <span
-        className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${ok ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
-      >
+      <span className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${ok ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>
         {ok && <Check size={11} strokeWidth={3} aria-hidden='true' />}
       </span>
       {children}
@@ -31,8 +29,11 @@ export default function RegisterPage() {
   const [senha, setSenha] = useState('');
   const [confirmacaoSenha, setConfirmacaoSenha] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [resendMessage, setResendMessage] = useState('');
 
   const validationMessage = useMemo(() => {
     if (!nome.trim()) return 'Informe seu nome.';
@@ -47,6 +48,7 @@ export default function RegisterPage() {
     event.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
+    setResendMessage('');
 
     if (validationMessage) {
       setErrorMessage(validationMessage);
@@ -56,8 +58,10 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      await authClient.post('/auth/registrar', { nome: nome.trim(), email: email.trim(), senha });
+      const emailCadastro = email.trim();
+      await authClient.post('/auth/registrar', { nome: nome.trim(), email: emailCadastro, senha });
       setSuccessMessage('Cadastro realizado com sucesso. Verifique seu e-mail para confirmar a conta.');
+      setRegisteredEmail(emailCadastro);
       setNome('');
       setEmail('');
       setSenha('');
@@ -70,19 +74,36 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleResendVerification() {
+    setResendMessage('');
+    setIsResending(true);
+
+    try {
+      const { data } = await authClient.post<{ detail: string }>('/auth/resend-verification', { email: registeredEmail });
+      setResendMessage(data.detail);
+    } catch (error) {
+      const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
+      setResendMessage(detail ?? 'Não foi possível reenviar o e-mail. Tente novamente.');
+    } finally {
+      setIsResending(false);
+    }
+  }
+
   if (successMessage) {
     return (
       <AuthShell title='Quase lá!' subtitle='Falta só confirmar seu e-mail.'>
         <div className='rounded-2xl border border-green-200 bg-green-50 p-6 text-center'>
           <MailCheck className='mx-auto text-green-600' size={40} aria-hidden='true' />
-          <p className='mt-4 font-medium text-green-800' role='status'>
-            {successMessage}
-          </p>
+          <p className='mt-4 font-medium text-green-800' role='status'>{successMessage}</p>
           <p className='mt-2 text-sm text-green-700'>Não achou? Confira a caixa de spam.</p>
+          {resendMessage ? <p className='mt-3 text-sm text-green-700'>{resendMessage}</p> : null}
         </div>
+        <Button type='button' className='mt-6 w-full' isLoading={isResending} onClick={handleResendVerification}>
+          Reenviar e-mail de ativação
+        </Button>
         <Link
           href='/login'
-          className='mt-6 flex w-full items-center justify-center rounded-lg bg-green-600 py-3 text-base font-medium text-white transition-colors hover:bg-green-700 focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2'
+          className='mt-3 flex w-full items-center justify-center rounded-lg border border-green-600 py-3 text-base font-medium text-green-700 transition-colors hover:bg-green-50 focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2'
         >
           Ir para o login
         </Link>
@@ -93,16 +114,7 @@ export default function RegisterPage() {
   return (
     <AuthShell title='Crie sua conta' subtitle='É grátis e leva menos de um minuto.'>
       <form className='space-y-5' onSubmit={handleSubmit} noValidate>
-        <AuthInput
-          id='nome'
-          label='Nome'
-          icon={User}
-          autoComplete='name'
-          placeholder='Como quer ser chamado'
-          value={nome}
-          onChange={(event) => setNome(event.target.value)}
-          required
-        />
+        <AuthInput id='nome' label='Nome' icon={User} autoComplete='name' placeholder='Como quer ser chamado' value={nome} onChange={(event) => setNome(event.target.value)} required />
         <AuthInput
           id='email'
           label='E-mail'
@@ -146,23 +158,13 @@ export default function RegisterPage() {
           onChange={(event) => setConfirmacaoSenha(event.target.value)}
           required
         />
-
-        {errorMessage ? (
-          <p role='alert' className='rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
-            {errorMessage}
-          </p>
-        ) : null}
-
-        <Button type='submit' className='w-full py-3 text-base' isLoading={isSubmitting}>
-          Criar conta
-        </Button>
+        {errorMessage ? <p role='alert' className='rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>{errorMessage}</p> : null}
+        <Button type='submit' className='w-full py-3 text-base' isLoading={isSubmitting}>Criar conta</Button>
       </form>
 
       <p className='mt-8 text-center text-sm text-gray-600'>
         Já tem conta?{' '}
-        <Link className='font-semibold text-green-700 hover:underline' href='/login'>
-          Entrar
-        </Link>
+        <Link className='font-semibold text-green-700 hover:underline' href='/login'>Entrar</Link>
       </p>
     </AuthShell>
   );

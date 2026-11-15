@@ -13,6 +13,7 @@ from app.schemas.usuario import (
     ForgotPasswordRequest,
     RegisterResponse,
     RefreshRequest,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     Token,
     TokenPair,
@@ -96,6 +97,39 @@ def registrar(
         access_token=access_token,
         token_type="bearer",
     )
+
+
+@router.post("/resend-verification", summary="Reenviar e-mail de verificação")
+def reenviar_verificacao(
+    payload: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    usuario = (
+        db.query(Usuario)
+        .filter(
+            Usuario.email == payload.email,
+            Usuario.is_active.is_(True),
+            Usuario.email_verificado.is_(False),
+        )
+        .first()
+    )
+
+    if usuario:
+        token_verificacao = secrets.token_urlsafe(32)
+        usuario.token_verificacao = hash_password(token_verificacao)
+        db.commit()
+
+        background_tasks.add_task(
+            send_verification_email,
+            destinatario=usuario.email,
+            nome=usuario.nome,
+            token=token_verificacao,
+        )
+
+    return {
+        "detail": "Se houver uma conta pendente para este e-mail, um novo link será enviado."
+    }
 
 
 @router.post("/verify-email", summary="Verify e-mail")
