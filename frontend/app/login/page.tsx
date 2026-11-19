@@ -23,7 +23,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [resendMessage, setResendMessage] = useState('');
 
   const validationMessage = useMemo(() => {
     if (!email.trim()) return 'Informe seu e-mail.';
@@ -35,6 +37,7 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage('');
+    setResendMessage('');
 
     if (validationMessage) {
       setErrorMessage(validationMessage);
@@ -45,7 +48,6 @@ export default function LoginPage() {
 
     try {
       const payload = new URLSearchParams();
-      // OAuth2PasswordRequestForm exige o campo "username", mesmo quando a credencial é e-mail.
       payload.append('username', email.trim());
       payload.append('password', senha);
       const { data } = await authClient.post<LoginResponse>('/auth/login', payload, {
@@ -56,13 +58,29 @@ export default function LoginPage() {
       });
       login(data.access_token, data.refresh_token, profileResponse.data);
       const next = new URLSearchParams(window.location.search).get('next');
-      // Só caminhos internos, para não virar open redirect
       router.push(next?.startsWith('/') && !next.startsWith('//') ? next : '/anuncios');
     } catch (error) {
       const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
       setErrorMessage(detail ?? 'Não foi possível fazer login. Tente novamente.');
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setResendMessage('');
+    setIsResending(true);
+
+    try {
+      const { data } = await authClient.post<{ detail: string }>('/auth/resend-verification', {
+        email: email.trim(),
+      });
+      setResendMessage(data.detail);
+    } catch (error) {
+      const detail = error instanceof AxiosError ? (error.response?.data as { detail?: string } | undefined)?.detail : undefined;
+      setResendMessage(detail ?? 'Não foi possível reenviar o e-mail. Tente novamente.');
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -101,13 +119,16 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {errorMessage ? (
-          <p role='alert' className='rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
-            {errorMessage}
-          </p>
+        {errorMessage ? <p role='alert' className='text-sm text-red-600'>{errorMessage}</p> : null}
+        {errorMessage === 'E-mail ainda não verificado' ? (
+          <div className='space-y-2'>
+            <Button type='button' variant='outline' className='w-full' isLoading={isResending} onClick={handleResendVerification}>
+              Reenviar e-mail de verificação
+            </Button>
+            {resendMessage ? <p className='text-sm text-green-700'>{resendMessage}</p> : null}
+          </div>
         ) : null}
-
-        <Button type='submit' className='w-full py-3 text-base' isLoading={isSubmitting}>
+        <Button type='submit' className='w-full' isLoading={isSubmitting}>
           Entrar
         </Button>
       </form>
