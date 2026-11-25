@@ -1,8 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (process.env.NODE_ENV !== 'production' ? 'http://localhost:8000' : undefined);
+import { API_BASE_URL as BASE_URL } from './api';
 
 let socket: Socket | null = null;
 

@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # Frontend base URL used in e-mail links
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Senha que o ESP32 envia no header X-Locker-Token ao buscar comandos.
+    # Vazio = endpoint do dispositivo desligado.
+    # ponytail: um token para todos os lockers; vira coluna por locker quando houver mais de um físico.
+    LOCKER_DEVICE_TOKEN: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         if self.CORS_ORIGINS.strip() == "*":

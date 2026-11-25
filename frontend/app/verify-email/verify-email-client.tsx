@@ -90,8 +90,8 @@ export default function VerifyEmailClient() {
             Se este link já expirou, solicite um novo cadastro e verifique o e-mail novamente.
           </p>
           <p className='mt-2'>
-            <Link className='font-medium text-green-700 hover:underline' href='/forgot-password'>
-              Enviar novo e-mail
+            <Link className='font-medium text-green-700 hover:underline' href='/login'>
+              Ir para login e reenviar e-mail
             </Link>
           </p>
         </div>

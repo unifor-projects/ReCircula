@@ -128,3 +128,61 @@ def test_concluir_doacao_exige_fechamento_antes(client, db_session):
     )
     assert concluir.status_code == 200
     assert concluir.json()["status"] == "doado_trocado"
+    assert concluir.json()["doado_via_locker"] is True
+
+    # Depois de doado, o dono ainda pode abrir o locker e o anúncio continua em "Meus anúncios"
+    reabrir = client.post(f"/anuncios/{anuncio.id}/locker/abrir", headers={"Authorization": "Bearer " + token})
+    assert reabrir.status_code == 200
+    perfil = client.get(f"/usuarios/{user.id}?incluir_concluidos=true").json()
+    assert [(a["id"], a["doado_via_locker"]) for a in perfil["anuncios_publicados"]] == [(anuncio.id, True)]
+    listagem = client.get("/anuncios/").json()
+    assert [(a["id"], a["doado_via_locker"]) for a in listagem] == [(anuncio.id, True)]
+    assert [a["id"] for a in client.get("/anuncios/?status=doado_no_locker").json()] == [anuncio.id]
+
+
+def test_listagem_oculta_concluido_fora_do_locker(client, db_session):
+    token = _register_and_get_token(client, "locker-manual@example.com")
+    user = db_session.query(Usuario).filter(Usuario.email == "locker-manual@example.com").first()
+    anuncio = _make_anuncio(db_session, user.id, _make_locker(db_session, code="UNI04").id)
+    client.patch(f"/anuncios/{anuncio.id}/status", json={"status": "doado_trocado"}, headers={"Authorization": "Bearer " + token})
+    assert client.get("/anuncios/").json() == []
+    assert client.get("/anuncios/?status=doado_no_locker").json() == []
+
+
+def test_outro_usuario_abre_locker_mas_nao_conclui(client, db_session):
+    _register_and_get_token(client, "locker-dono@example.com")
+    dono = db_session.query(Usuario).filter(Usuario.email == "locker-dono@example.com").first()
+    anuncio = _make_anuncio(db_session, dono.id, _make_locker(db_session, code="UNI05").id)
+    outro = {"Authorization": "Bearer " + _register_and_get_token(client, "locker-outro@example.com")}
+
+    assert client.post(f"/anuncios/{anuncio.id}/locker/abrir", headers=outro).status_code == 200
+    assert client.post(f"/anuncios/{anuncio.id}/locker/fechar", headers=outro).status_code == 200
+    assert client.post(f"/anuncios/{anuncio.id}/locker/concluir", headers=outro).status_code == 403
+    assert client.post(f"/anuncios/{anuncio.id}/locker/abrir").status_code == 401
+
+
+def test_esp32_busca_comando_pelo_wifi(client, db_session, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "LOCKER_DEVICE_TOKEN", "segredo-do-locker")
+    token = _register_and_get_token(client, "locker-wifi@example.com")
+    user = db_session.query(Usuario).filter(Usuario.email == "locker-wifi@example.com").first()
+    anuncio = _make_anuncio(db_session, user.id, _make_locker(db_session, code="UNI06").id)
+    esp32 = {"X-Locker-Token": "segredo-do-locker"}
+
+    assert client.get("/lockers/UNI06/comando", headers=esp32).text == ""
+    client.post(f"/anuncios/{anuncio.id}/locker/abrir", headers={"Authorization": "Bearer " + token})
+    assert client.get("/lockers/UNI06/comando", headers=esp32).text == "ABRIR"
+    # entregue uma vez só
+    assert client.get("/lockers/UNI06/comando", headers=esp32).text == ""
+    assert client.get("/lockers/UNI06/comando", headers={"X-Locker-Token": "errado"}).status_code == 401
+
+
+def test_comando_antigo_expira(monkeypatch):
+    from app.services import locker_control
+
+    locker = Locker(codigo_unidade="UNI07")
+    locker_control.enviar_comando_fechamento(locker, 1)
+    agora = locker_control.time.monotonic()
+    monkeypatch.setattr(locker_control.time, "monotonic", lambda: agora + locker_control.VALIDADE_COMANDO_S + 1)
+    assert locker_control.retirar_comando("UNI07") == ""

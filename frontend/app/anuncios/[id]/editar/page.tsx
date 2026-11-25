@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import Button from '@/components/Button';
-import { useAuth } from '@/contexts/AuthContext';
+import { loginUrl, useAuth } from '@/contexts/AuthContext';
 import api, { API_BASE_URL } from '@/services/api';
 
 function getImageUrl(url: string): string {
@@ -71,7 +71,7 @@ export default function EditarAnuncioPage() {
   const params = useParams<{ id: string }>();
   const anuncioId = Number(params?.id ?? NaN);
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isReady } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [anuncioOriginal, setAnuncioOriginal] = useState<AnuncioCarregado | null>(null);
@@ -95,8 +95,9 @@ export default function EditarAnuncioPage() {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
+    if (!isReady) return;
     if (!isAuthenticated) {
-      router.replace('/login');
+      router.replace(loginUrl(`/anuncios/${anuncioId}/editar`));
       return;
     }
     if (Number.isNaN(anuncioId) || anuncioId <= 0) {
@@ -136,7 +137,7 @@ export default function EditarAnuncioPage() {
     }
 
     void carregar();
-  }, [anuncioId, isAuthenticated, router, user?.id]);
+  }, [anuncioId, isAuthenticated, isReady, router, user?.id]);
 
   useEffect(() => {
     const urls = novasImagens.map((f) => URL.createObjectURL(f));

@@ -18,6 +18,9 @@ services:
     restart: unless-stopped
     env_file:
       - backend/.env
+    environment:
+      # Dentro do Compose o banco é o serviço "db", não o localhost do .env
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/recircula_db
     # ports configuradas apenas no override para dev
     depends_on:
       db:

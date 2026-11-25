@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Button from '@/components/Button';
-import { useAuth } from '@/contexts/AuthContext';
+import DoadoLockerBadge from '@/components/DoadoLockerBadge';
+import { loginUrl, useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 
 interface MeuAnuncio {
@@ -13,6 +14,7 @@ interface MeuAnuncio {
   tipo: string;
   status: string;
   criado_em: string;
+  doado_via_locker: boolean;
 }
 
 interface PerfilResponse {
@@ -48,7 +50,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function MeusAnunciosPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isReady } = useAuth();
   const router = useRouter();
 
   const [anuncios, setAnuncios] = useState<MeuAnuncio[]>([]);
@@ -58,8 +60,9 @@ export default function MeusAnunciosPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!isReady) return;
     if (!isAuthenticated || !user) {
-      router.replace('/login');
+      router.replace(loginUrl('/anuncios/meus'));
       return;
     }
 
@@ -67,7 +70,7 @@ export default function MeusAnunciosPage() {
       setLoading(true);
       setErrorMessage('');
       try {
-        const { data } = await api.get<PerfilResponse>(`/usuarios/${user!.id}`);
+        const { data } = await api.get<PerfilResponse>(`/usuarios/${user!.id}?incluir_concluidos=true`);
         setAnuncios(data.anuncios_publicados);
       } catch {
         setErrorMessage('Não foi possível carregar seus anúncios.');
@@ -77,7 +80,7 @@ export default function MeusAnunciosPage() {
     }
 
     void carregar();
-  }, [isAuthenticated, router, user]);
+  }, [isAuthenticated, isReady, router, user]);
 
   async function handleDelete(id: number) {
     setDeletingId(id);
@@ -144,11 +147,15 @@ export default function MeusAnunciosPage() {
                       >
                         {TIPO_LABEL[anuncio.tipo] ?? anuncio.tipo}
                       </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[anuncio.status] ?? 'bg-gray-100 text-gray-600 border border-gray-200'}`}
-                      >
-                        {STATUS_LABEL[anuncio.status] ?? anuncio.status}
-                      </span>
+                      {anuncio.doado_via_locker ? (
+                        <DoadoLockerBadge />
+                      ) : (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[anuncio.status] ?? 'bg-gray-100 text-gray-600 border border-gray-200'}`}
+                        >
+                          {STATUS_LABEL[anuncio.status] ?? anuncio.status}
+                        </span>
+                      )}
                     </div>
                     <p className="mt-2 text-xs text-gray-400">Publicado em {formatarData(anuncio.criado_em)}</p>
                   </div>

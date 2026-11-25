@@ -1,19 +1,33 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { getSocket } from '@/services/socket';
 
 interface Props {
   conversationId: number;
   onSend: (content: string) => void;
+  /** Texto já preenchido (ex.: primeira mensagem sobre um anúncio) */
+  initialText?: string;
+  /** Respostas rápidas: um toque envia */
+  suggestions?: string[];
 }
 
 const TYPING_DEBOUNCE_MS = 2000;
 
-export default function MessageInput({ conversationId, onSend }: Props) {
-  const [text, setText] = useState('');
+export default function MessageInput({ conversationId, onSend, initialText = '', suggestions = [] }: Props) {
+  const [text, setText] = useState(initialText);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Ajusta a altura ao conteúdo (inclusive texto já preenchido e depois de enviar)
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+    el.style.overflow = el.scrollHeight > 128 ? 'auto' : 'hidden';
+  }, [text]);
   const isTypingRef = useRef(false);
 
   const emitTypingStart = useCallback(() => {
@@ -65,28 +79,38 @@ export default function MessageInput({ conversationId, onSend }: Props) {
   );
 
   return (
-    <div className="border-t border-gray-200 px-4 py-3">
+    <div className="border-t border-gray-200 bg-white px-3 py-3 sm:px-4">
+      {suggestions.length > 0 && (
+        <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1 pb-1">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onSend(s)}
+              className="shrink-0 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 transition hover:border-green-300 hover:bg-green-100 active:scale-95"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex items-end gap-2">
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Digite uma mensagem..."
+          placeholder="Escreva uma mensagem…"
+          aria-label="Mensagem"
           rows={1}
-          className="max-h-32 min-h-[40px] flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition-colors focus:border-green-300 focus:bg-white"
-          style={{ height: 'auto', overflow: 'hidden' }}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = 'auto';
-            target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
-            target.style.overflow = target.scrollHeight > 128 ? 'auto' : 'hidden';
-          }}
+          className="max-h-32 min-h-[44px] flex-1 resize-none rounded-3xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-500 outline-none transition-colors focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-100"
         />
         <button
           type="button"
           onClick={handleSend}
           disabled={!text.trim()}
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-green-500 text-white transition-colors hover:bg-green-600 disabled:bg-gray-200 disabled:text-gray-400"
+          aria-label="Enviar mensagem"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-green-600 text-white shadow-sm transition hover:bg-green-700 active:scale-95 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
         >
           <Send size={18} />
         </button>

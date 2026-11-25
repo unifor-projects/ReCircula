@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Circle } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Circle } from 'lucide-react';
+import Link from 'next/link';
 import api from '@/services/api';
 import { getSocket } from '@/services/socket';
 import { useChatStore } from '@/store/chatStore';
+import AnuncioContexto from '@/components/chat/AnuncioContexto';
 import MessageInput from '@/components/chat/MessageInput';
 import type { ChatConversation, ChatMessage } from '@/types/chat';
 
@@ -45,9 +47,21 @@ interface Props {
   conversation: ChatConversation;
   currentUserId: number;
   onBack: () => void;
+  /** Anúncio de onde a pessoa veio (botão "Enviar mensagem"), para dar contexto */
+  anuncioId?: number | null;
 }
 
-export default function ChatWindow({ conversation, currentUserId, onBack }: Props) {
+const SUGESTOES_INICIO = [
+  'Oi! Ainda está disponível?',
+  'Posso retirar hoje?',
+  'Pode deixar no locker?',
+];
+const SUGESTOES_CONVERSA = ['Combinado!', 'Qual horário fica bom?', 'Deixo no locker', 'Obrigado!'];
+
+export default function ChatWindow({ conversation, currentUserId, onBack, anuncioId }: Props) {
+  const [tituloAnuncio, setTituloAnuncio] = useState<string | null>(null);
+  const [showJump, setShowJump] = useState(false);
+  const [novasFora, setNovasFora] = useState(0);
   // Local state — guaranteed to trigger re-renders when updated
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -67,6 +81,8 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  // Primeira carga de cada conversa pula direto para o fim (sem animação de rolagem)
+  const initialScrollDone = useRef(false);
   const conversationIdRef = useRef(conversation.id);
   conversationIdRef.current = conversation.id;
 
@@ -79,6 +95,9 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
     setMessages([]);
     setInitialLoaded(false);
     shouldAutoScroll.current = true;
+    initialScrollDone.current = false;
+    setShowJump(false);
+    setNovasFora(0);
 
     api
       .get<MessagePageResponse>(`/api/chat/conversations/${conversation.id}/messages`, {
@@ -125,7 +144,12 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
         }
         return [...next, msg];
       });
-      shouldAutoScroll.current = true;
+      // Só desce sozinho se a mensagem é minha ou se já estou perto do fim
+      if (msg.sender_id === currentUserId) {
+        shouldAutoScroll.current = true;
+      } else if (!shouldAutoScroll.current) {
+        setNovasFora((n) => n + 1);
+      }
 
       // Mark as read if we are the recipient
       if (msg.sender_id !== currentUserId) {
@@ -171,9 +195,14 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
 
   // Auto-scroll when messages change
   useEffect(() => {
-    if (shouldAutoScroll.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: initialLoaded ? 'smooth' : 'auto' });
+    if (!shouldAutoScroll.current || messages.length === 0) return;
+    const container = messagesContainerRef.current;
+    if (!initialScrollDone.current && initialLoaded && container) {
+      container.scrollTop = container.scrollHeight;
+      initialScrollDone.current = true;
+      return;
     }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, initialLoaded]);
 
   const handleScroll = useCallback(() => {
@@ -181,7 +210,10 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
     if (!container) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
-    shouldAutoScroll.current = scrollHeight - scrollTop - clientHeight < 100;
+    const distanciaDoFim = scrollHeight - scrollTop - clientHeight;
+    shouldAutoScroll.current = distanciaDoFim < 100;
+    setShowJump(distanciaDoFim > 300);
+    if (distanciaDoFim < 100) setNovasFora(0);
 
     if (scrollTop < 50 && hasMore && !loadingMore && nextCursor) {
       setLoadingMore(true);
@@ -241,16 +273,24 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
     [conversation.id, currentUserId],
   );
 
-  let lastDateStr = '';
+  const GROUP_GAP_MS = 5 * 60 * 1000;
+  // Mensagens seguidas da mesma pessoa (até 5 min) formam um grupo: horário só na última
+  const sameGroup = (a: ChatMessage | undefined, b: ChatMessage | undefined) =>
+    !!a &&
+    !!b &&
+    a.sender_id === b.sender_id &&
+    new Date(a.created_at).toDateString() === new Date(b.created_at).toDateString() &&
+    Math.abs(new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) < GROUP_GAP_MS;
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3">
         <button
           type="button"
           onClick={onBack}
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 md:hidden"
+          aria-label="Voltar para as conversas"
+          className="-ml-1 flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
         >
           <ArrowLeft size={20} />
         </button>
@@ -258,90 +298,180 @@ export default function ChatWindow({ conversation, currentUserId, onBack }: Prop
           {other?.user.foto_url ? (
             <img
               src={other.user.foto_url}
-              alt={otherName}
-              className="h-9 w-9 rounded-full object-cover"
+              alt=""
+              width={40}
+              height={40}
+              className="h-10 w-10 rounded-full object-cover"
             />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-xs font-semibold text-green-700">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">
               {getInitials(otherName)}
             </span>
           )}
           {isOnline && (
-            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-green-500" />
+            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500" />
           )}
         </div>
-        <div>
-          <p className="text-sm font-semibold text-gray-800">{otherName}</p>
-          <p className="text-xs text-gray-400">{isOnline ? 'Online' : 'Offline'}</p>
+        <div className="min-w-0">
+          {other ? (
+            <Link
+              href={`/perfil/${other.user_id}`}
+              className="block truncate font-semibold text-gray-900 hover:underline"
+            >
+              {otherName}
+            </Link>
+          ) : (
+            <p className="truncate font-semibold text-gray-900">{otherName}</p>
+          )}
+          <p className={`text-xs ${isOnline ? 'text-green-700' : 'text-gray-500'}`}>
+            {isOnline ? 'Online agora' : 'Offline'}
+          </p>
         </div>
       </div>
 
+      {anuncioId ? <AnuncioContexto anuncioId={anuncioId} onCarregado={setTituloAnuncio} /> : null}
+
       {/* Messages area */}
-      <div
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-3"
-      >
-        {loadingMore && (
-          <div className="mb-2 text-center text-xs text-gray-400">Carregando mensagens...</div>
-        )}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto bg-gray-50 px-3 py-4 sm:px-6"
+        >
+          {loadingMore && (
+            <div className="mb-3 text-center text-xs text-gray-500">Carregando mensagens…</div>
+          )}
 
-        {messages.map((msg) => {
-          const isMine = msg.sender_id === currentUserId;
-          const msgDate = new Date(msg.created_at).toDateString();
-          let showDate = false;
-          if (msgDate !== lastDateStr) {
-            lastDateStr = msgDate;
-            showDate = true;
-          }
+          {initialLoaded && messages.length === 0 && (
+            <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-500">
+              <p className="font-medium text-gray-700">Nenhuma mensagem ainda</p>
+              <p className="mt-1">Diga oi para {otherName.split(' ')[0]} e combine a entrega.</p>
+            </div>
+          )}
 
-          return (
-            <div key={msg.id}>
-              {showDate && (
-                <div className="my-3 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-gray-200" />
-                  <span className="text-xs text-gray-400">{formatDateHeader(msg.created_at)}</span>
-                  <div className="h-px flex-1 bg-gray-200" />
-                </div>
-              )}
-              <div className={`mb-2 flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+          {messages.map((msg, i) => {
+            const isMine = msg.sender_id === currentUserId;
+            const prev = messages[i - 1];
+            const next = messages[i + 1];
+            const showDate =
+              !prev ||
+              new Date(prev.created_at).toDateString() !== new Date(msg.created_at).toDateString();
+            const groupStart = !sameGroup(prev, msg);
+            const groupEnd = !sameGroup(msg, next);
+            const pending = msg.id < 0;
+
+            // Canto de baixo do lado de quem falou fica reto; dentro de um grupo, o de cima também (balões "colados")
+            const corners = isMine
+              ? `rounded-2xl rounded-br-md ${groupStart ? '' : 'rounded-tr-md'}`
+              : `rounded-2xl rounded-bl-md ${groupStart ? '' : 'rounded-tl-md'}`;
+
+            return (
+              <div key={msg.id}>
+                {showDate && (
+                  <div className="my-4 flex justify-center">
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-500 shadow-sm ring-1 ring-gray-100">
+                      {formatDateHeader(msg.created_at)}
+                    </span>
+                  </div>
+                )}
                 <div
-                  className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${
-                    isMine
-                      ? 'rounded-br-md bg-green-500 text-white'
-                      : 'rounded-bl-md bg-gray-100 text-gray-800'
-                  }`}
+                  className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'} ${groupEnd ? 'mb-3' : 'mb-0.5'}`}
                 >
-                  <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
-                  <p
-                    className={`mt-0.5 text-right text-[10px] ${
-                      isMine ? 'text-green-100' : 'text-gray-400'
-                    }`}
+                  {!isMine &&
+                    (groupEnd ? (
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-green-100 text-[10px] font-semibold text-green-700">
+                        {other?.user.foto_url ? (
+                          <img
+                            src={other.user.foto_url}
+                            alt=""
+                            width={28}
+                            height={28}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          getInitials(otherName)
+                        )}
+                      </span>
+                    ) : (
+                      <span className="w-7 shrink-0" />
+                    ))}
+                  <div
+                    className={`max-w-[80%] px-3.5 py-2 shadow-sm sm:max-w-[65%] ${corners} ${
+                      isMine
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white text-gray-900 ring-1 ring-gray-100'
+                    } ${pending ? 'opacity-70' : ''}`}
                   >
-                    {formatMessageTime(msg.created_at)}
-                  </p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                      {msg.content}
+                    </p>
+                    {groupEnd && (
+                      <p
+                        className={`mt-0.5 text-right text-[11px] tabular-nums ${isMine ? 'text-green-100' : 'text-gray-500'}`}
+                      >
+                        {pending ? 'Enviando…' : formatMessageTime(msg.created_at)}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
+            );
+          })}
+
+          {typingUsers.length > 0 && (
+            <div className="mb-3 flex items-center gap-2" aria-live="polite">
+              <span className="flex gap-1 rounded-2xl rounded-bl-md bg-white px-3.5 py-3 shadow-sm ring-1 ring-gray-100">
+                {[0, 150, 300].map((delay) => (
+                  <Circle
+                    key={delay}
+                    size={6}
+                    className="fill-gray-400 text-gray-400 motion-safe:animate-bounce"
+                    style={{ animationDelay: `${delay}ms` }}
+                  />
+                ))}
+              </span>
+              <span className="text-xs text-gray-500">
+                {typingUsers.map((t) => t.username).join(', ')} está digitando…
+              </span>
             </div>
-          );
-        })}
+          )}
 
-        {typingUsers.length > 0 && (
-          <div className="mb-2 flex items-center gap-2 text-xs text-gray-400">
-            <span className="flex gap-0.5">
-              <Circle size={4} className="animate-bounce fill-gray-400" style={{ animationDelay: '0ms' }} />
-              <Circle size={4} className="animate-bounce fill-gray-400" style={{ animationDelay: '150ms' }} />
-              <Circle size={4} className="animate-bounce fill-gray-400" style={{ animationDelay: '300ms' }} />
-            </span>
-            <span>{typingUsers.map((t) => t.username).join(', ')} está digitando...</span>
-          </div>
+          <div ref={messagesEndRef} />
+        </div>
+
+        {showJump && (
+          <button
+            type="button"
+            onClick={() => {
+              shouldAutoScroll.current = true;
+              setNovasFora(0);
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            aria-label="Ir para a última mensagem"
+            className="absolute bottom-4 right-4 flex h-11 items-center gap-1.5 rounded-full bg-white px-3 text-sm font-medium text-gray-700 shadow-lg ring-1 ring-gray-200 transition hover:bg-gray-50"
+          >
+            {novasFora > 0 && (
+              <span className="rounded-full bg-green-600 px-1.5 text-xs font-semibold text-white">
+                {novasFora}
+              </span>
+            )}
+            <ArrowDown size={18} aria-hidden="true" />
+          </button>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Message input */}
-      <MessageInput conversationId={conversation.id} onSend={handleSend} />
+      <MessageInput
+        key={`${conversation.id}-${tituloAnuncio ?? ''}`}
+        conversationId={conversation.id}
+        onSend={handleSend}
+        initialText={
+          tituloAnuncio ? `Oi! Tenho interesse em “${tituloAnuncio}”. Ainda está disponível?` : ''
+        }
+        suggestions={
+          initialLoaded ? (messages.length === 0 ? SUGESTOES_INICIO : SUGESTOES_CONVERSA) : []
+        }
+      />
     </div>
   );
 }

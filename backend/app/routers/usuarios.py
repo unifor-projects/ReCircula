@@ -4,7 +4,7 @@ from typing import Annotated
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
@@ -184,19 +184,17 @@ def atualizar_meu_perfil(
 
 
 @router.get("/{usuario_id}", response_model=UsuarioPerfilResponse, summary="Perfil público de usuário")
-def perfil_usuario(usuario_id: int, db: Session = Depends(get_db)):
+def perfil_usuario(
+    usuario_id: int,
+    incluir_concluidos: bool = Query(False, description="Inclui anúncios já doados/trocados"),
+    db: Session = Depends(get_db),
+):
     """Retorna o perfil público de um usuário com seus anúncios publicados."""
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not usuario:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
-    anuncios_publicados = (
-        db.query(Anuncio)
-        .options(selectinload(Anuncio.imagens))
-        .filter(
-            Anuncio.usuario_id == usuario_id,
-            Anuncio.status != StatusAnuncio.doado_trocado,
-        )
-        .order_by(Anuncio.criado_em.desc())
-        .all()
-    )
+    query = db.query(Anuncio).options(selectinload(Anuncio.imagens)).filter(Anuncio.usuario_id == usuario_id)
+    if not incluir_concluidos:
+        query = query.filter(Anuncio.status != StatusAnuncio.doado_trocado)
+    anuncios_publicados = query.order_by(Anuncio.criado_em.desc()).all()
     return _serialize_usuario_perfil(usuario, anuncios_publicados)

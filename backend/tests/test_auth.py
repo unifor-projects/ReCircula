@@ -11,6 +11,7 @@ LOGIN_URL = "/auth/login"
 LOGOUT_URL = "/auth/logout"
 REFRESH_URL = "/auth/refresh"
 VERIFY_EMAIL_URL = "/auth/verify-email"
+RESEND_VERIFICATION_URL = "/auth/resend-verification"
 FORGOT_PASSWORD_URL = "/auth/forgot-password"
 RESET_PASSWORD_URL = "/auth/reset-password"
 
@@ -168,6 +169,53 @@ class TestVerificarEmail:
 
         assert primeira.status_code == 200
         assert segunda.status_code == 400
+
+
+class TestReenviarVerificacao:
+    def test_reenvio_gera_novo_token_e_envia_email(self, client, db_session):
+        with patch("app.routers.auth.send_verification_email") as mock_send:
+            client.post(REGISTER_URL, json=VALID_PAYLOAD)
+            primeiro_token = mock_send.call_args.kwargs["token"]
+
+            resp = client.post(RESEND_VERIFICATION_URL, json={"email": VALID_PAYLOAD["email"]})
+
+        assert resp.status_code == 200
+        assert "conta pendente" in resp.json()["detail"]
+        assert mock_send.call_count == 2
+
+        segundo_token = mock_send.call_args.kwargs["token"]
+        assert segundo_token != primeiro_token
+        usuario = db_session.query(Usuario).filter(Usuario.email == VALID_PAYLOAD["email"]).first()
+        assert usuario is not None
+        assert usuario.token_verificacao != segundo_token
+        assert verify_password(segundo_token, usuario.token_verificacao)
+        assert not verify_password(primeiro_token, usuario.token_verificacao)
+
+    def test_reenvio_de_email_inexistente_retorna_mensagem_generica(self, client):
+        with patch("app.routers.auth.send_verification_email") as mock_send:
+            resp = client.post(RESEND_VERIFICATION_URL, json={"email": "naoexiste@example.com"})
+
+        assert resp.status_code == 200
+        assert "conta pendente" in resp.json()["detail"]
+        mock_send.assert_not_called()
+
+    def test_reenvio_de_email_verificado_retorna_mensagem_generica(self, client):
+        with patch("app.routers.auth.send_verification_email") as mock_send:
+            client.post(REGISTER_URL, json=VALID_PAYLOAD)
+            token = mock_send.call_args.kwargs["token"]
+        client.post(VERIFY_EMAIL_URL, json={"token": token})
+
+        with patch("app.routers.auth.send_verification_email") as mock_send:
+            resp = client.post(RESEND_VERIFICATION_URL, json={"email": VALID_PAYLOAD["email"]})
+
+        assert resp.status_code == 200
+        assert "conta pendente" in resp.json()["detail"]
+        mock_send.assert_not_called()
+
+    def test_reenvio_valida_o_email(self, client):
+        resp = client.post(RESEND_VERIFICATION_URL, json={"email": "email-invalido"})
+
+        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------

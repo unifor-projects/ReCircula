@@ -52,6 +52,7 @@ class UsuarioPerfilAnuncio(BaseModel):
     tipo: TipoAnuncio
     status: StatusAnuncio
     criado_em: datetime
+    doado_via_locker: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -101,6 +102,10 @@ class RefreshRequest(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., examples=["joao@email.com"])
+
+
+class ResendVerificationRequest(BaseModel):
     email: EmailStr = Field(..., examples=["joao@email.com"])
 
 

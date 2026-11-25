@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { MessageCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '@/store/chatStore';
 import { getSocket } from '@/services/socket';
@@ -15,6 +16,7 @@ export default function ChatPageClient() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const convParam = searchParams?.get('conv') ?? null;
+  const anuncioParam = Number(searchParams?.get('anuncio')) || null;
   const {
     conversations,
     setConversations,
@@ -90,7 +92,7 @@ export default function ChatPageClient() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-6xl overflow-hidden bg-slate-50">
+    <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-6xl overflow-hidden bg-white md:my-4 md:h-[calc(100dvh-6rem)] md:rounded-2xl md:border md:border-gray-200 md:shadow-sm">
       {/* Sidebar — hidden on mobile when chat is open */}
       <div
         className={`w-full flex-shrink-0 border-r border-gray-200 md:w-80 ${
@@ -113,10 +115,18 @@ export default function ChatPageClient() {
             conversation={activeConversation}
             currentUserId={user?.id ?? 0}
             onBack={handleBack}
+            // O anúncio só vale para a conversa aberta pelo botão do anúncio
+            anuncioId={String(activeConversation.id) === convParam ? anuncioParam : null}
           />
         ) : (
-          <div className="flex flex-1 items-center justify-center text-gray-400">
-            <p>Selecione uma conversa para começar</p>
+          <div className="flex flex-1 flex-col items-center justify-center bg-gray-50 px-6 text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-700">
+              <MessageCircle size={28} aria-hidden="true" />
+            </span>
+            <p className="mt-4 font-semibold text-gray-900">Suas conversas</p>
+            <p className="mt-1 max-w-xs text-sm text-gray-500">
+              Escolha uma conversa ao lado para combinar a entrega de um item.
+            </p>
           </div>
         )}
       </div>

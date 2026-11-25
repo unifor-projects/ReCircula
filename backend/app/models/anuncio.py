@@ -90,6 +90,13 @@ class Anuncio(Base):
         "LockerEvento", back_populates="anuncio", cascade="all, delete-orphan"
     )
 
+    @property
+    def doado_via_locker(self) -> bool:
+        # ponytail: carrega locker_eventos por anúncio (N+1 em listas); vira coluna se a lista crescer
+        return self.status == StatusAnuncio.doado_trocado and any(
+            e.sucesso and e.acao.value == "concluir_doacao" for e in self.locker_eventos
+        )
+
 
 class AnuncioImagem(Base):
     __tablename__ = "images"
